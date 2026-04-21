@@ -1,16 +1,14 @@
-import plotly.express as px
-import plotly.graph_objects as go
-import plotly.io as pio
-from duckdb import sql
-
+from plotly.graph_objects import Figure
 from sqplot import specs
-from sqplot.parser import get_chart_spec
-from sqplot.backends.plotly import charts as _charts
-from sqplot.backends.plotly.config import apply_theme
-from sqplot.backends.plotly.layout import apply_layout
 
 
-def plot(sql_script: str) -> go.Figure:
+def plot(sql_script: str) -> Figure:
+    from duckdb import sql
+    from sqplot.backends.plotly import charts
+    from sqplot.parser import get_chart_spec
+    from sqplot.backends.plotly.config import apply_theme
+    from sqplot.backends.plotly.layout import apply_layout
+
     apply_theme()
     df = sql(sql_script).df()
     spec = get_chart_spec(sql_script)
@@ -20,7 +18,7 @@ def plot(sql_script: str) -> go.Figure:
     figs = []
     active_traces: list[specs.Chart] = []
     for trace in spec.traces:
-        func = getattr(_charts, trace.id, None)
+        func = getattr(charts, trace.id, None)
         if func is None:
             continue
         fig = func(df, trace)
@@ -34,12 +32,15 @@ def plot(sql_script: str) -> go.Figure:
 
 
 def _combine_figures(
-    figs: list[go.Figure], trace_specs: list[specs.Chart] | None = None
-) -> go.Figure:
+    figs: list[Figure], trace_specs: list[specs.Chart] | None = None
+) -> Figure:
+    import plotly.express as px
+    import plotly.io as pio
+
     if len(figs) == 1:
         return figs[0]
 
-    combined = go.Figure(figs[0])
+    combined = Figure(figs[0])
 
     colorway = (
         pio.templates[pio.templates.default].layout.colorway
