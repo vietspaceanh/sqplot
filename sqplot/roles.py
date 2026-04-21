@@ -19,7 +19,9 @@ def get_col_roles(sql_script):
             col_name = exp.alias_or_name
 
         if col_name and exp.comments:
-            column_roles[col_name] = split_preserving_groups(" ".join(exp.comments))
+            column_roles[col_name] = split_preserving_groups(" ".join(
+                [comment for comment in exp.comments if '--' not in comment]
+            ))
 
     # Global roles are specified in the top of the query, and are assignments only.
     global_roles = [

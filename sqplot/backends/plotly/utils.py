@@ -102,25 +102,8 @@ def color_with_alpha(hex_color: str, alpha: float) -> str:
 
 
 def apply_opacity(fig: go.Figure, opacity: float | None) -> None:
-    if opacity is None:
-        return
-    fig.update_traces(marker_opacity=opacity)
-    for t in fig.data:
-        c = (
-            getattr(t.marker, "color", None)
-            or getattr(t, "marker_color", None)
-            or getattr(t.line, "color", None)
-        )
-        if isinstance(c, str) and c.startswith("#"):
-            rgba = color_with_alpha(c, opacity)
-            try:
-                t.fillcolor = rgba
-            except ValueError:
-                pass
-            try:
-                t.line.color = rgba
-            except (ValueError, AttributeError):
-                pass
+    if opacity is not None:
+        fig.update_traces(opacity=opacity)
 
 
 def has_duplicate_x(

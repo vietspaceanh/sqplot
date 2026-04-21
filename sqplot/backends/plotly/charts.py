@@ -318,7 +318,7 @@ def density(df: pd.DataFrame, spec: specs.Density) -> go.Figure:
     for t in fig.data:
         t.stackgroup = None
         t.fill = "tozeroy"
-    apply_opacity(fig, spec.opacity if spec.opacity is not None else 0.3)
+    apply_opacity(fig, spec.opacity)
 
     update = line_style_update(spec.line_style)
     if spec.name:
