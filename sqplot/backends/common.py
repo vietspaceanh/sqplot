@@ -1,0 +1,16 @@
+SOOTHING_PASTELS = [
+    "#BB9AF7",
+    "#F7768E",
+    "#9ECE6A",
+    "#7AA2F7",
+    "#FF9E64",
+    "#B4A8D4",
+    "#E0AF68",
+    "#9DCEDC",
+    "#C0CAF5",
+    "#B4D4A8",
+    "#A8C5DA",
+    "#ECC9B9",
+    "#A8D5BA",
+    "#F7A8B8",
+]

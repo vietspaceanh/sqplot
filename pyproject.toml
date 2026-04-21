@@ -1,0 +1,19 @@
+[project]
+name = "sqplot"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "fsspec>=2025.9.0",
+    "numpy>=2.3.3",
+    "pandas>=2.3.3",
+    "plotly>=6.3.1",
+    "pyarrow>=21.0.0",
+    "duckdb>=1.4.3",
+    "sqlglot>=30.4.3",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.2.0",
+    "nbformat>=5.10.4",
+]
