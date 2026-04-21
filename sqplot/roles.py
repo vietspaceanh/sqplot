@@ -109,15 +109,13 @@ def get_tag_value(
     tag_dict = {}
     tag_sequence = []
     all_tag_names = set()
-    key_tag_positions = {}
 
     plain_count = 0
     for tag in tags:
         if "=" in tag:
             key, value = parse_tag(tag)
-            tag_dict[key] = value
+            tag_dict.setdefault(key, []).append((plain_count, value))
             all_tag_names.add(key)
-            key_tag_positions[key] = plain_count
         else:
             all_tag_names.add(tag)
             if tag not in bool_tags_set:
@@ -138,8 +136,8 @@ def get_tag_value(
                 return None
         elif component in tag_dict:
             if not has_wildcard:
-                required_position = key_tag_positions[component]
-                if tag_idx != required_position:
+                positions = [pos for pos, _ in tag_dict[component]]
+                if tag_idx not in positions:
                     return None
         else:
             if tag_idx >= len(tag_sequence) or tag_sequence[tag_idx] != component:
@@ -149,6 +147,11 @@ def get_tag_value(
     last_component = path_components[-1]
 
     if last_component in tag_dict:
-        return tag_dict[last_component]
+        if has_wildcard:
+            return tag_dict[last_component][-1][1]
+        for pos, val in tag_dict[last_component]:
+            if pos == tag_idx:
+                return val
+        return None
 
     return True
