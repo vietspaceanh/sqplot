@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field, replace
 from typing import ClassVar
 
-from .roles import get_tag_value
+from .roles import get_tag_value, parse_tag
 
 
 # ── Data Dimension Mapping ───────────────────────────────────────────────────
@@ -90,6 +90,22 @@ def _get_name(tags: list[str], prefix: str) -> str | None:
     return get_tag_value(f"{prefix} name", tags, bool_tags=BOOL_TAGS)
 
 
+def _get_orientation(tags: list[str], chart_id: str) -> str | None:
+    if get_tag_value(f"{chart_id} horizontal", tags, bool_tags=BOOL_TAGS):
+        return "h"
+    return None
+
+
+def _get_opacity(tags: list[str], chart_id: str) -> float | None:
+    for tag in tags:
+        if "=" not in tag:
+            continue
+        key, val = parse_tag(tag)
+        if key in ("alpha", "opacity") and val is not None:
+            return float(val)
+    return None
+
+
 def _parse_line_style(tags: list[str], prefix: str) -> LineStyle | None:
     color = get_tag_value(f"{prefix} color", tags, bool_tags=BOOL_TAGS)
     width = get_tag_value(f"{prefix} size", tags, bool_tags=BOOL_TAGS)
@@ -163,6 +179,7 @@ class Line(Chart):
     markers: MarkerStyle | None = None
     error_band: ErrorBand | None = None
     error_bar: ErrorBar | None = None
+    opacity: float | None = None
 
     @classmethod
     def parse(
@@ -174,6 +191,7 @@ class Line(Chart):
             line_style=_parse_line_style(tags, chart_id),
             markers=_parse_markers(tags, chart_id),
             error_bar=_parse_error_bar(tags, chart_id),
+            opacity=_get_opacity(tags, chart_id),
         )
 
 
@@ -207,19 +225,14 @@ class Bar(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Bar:
-        orientation = (
-            "h"
-            if get_tag_value(f"{chart_id} horizontal", tags, bool_tags=BOOL_TAGS)
-            else None
-        )
         return cls(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             color=get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS),
             border=_parse_border(tags, chart_id),
-            orientation=orientation,
+            orientation=_get_orientation(tags, chart_id),
             bar_width=get_tag_value(f"{chart_id} size", tags, bool_tags=BOOL_TAGS),
-            opacity=get_tag_value(f"{chart_id} opacity", tags, bool_tags=BOOL_TAGS),
+            opacity=_get_opacity(tags, chart_id),
             annotation_position=get_tag_value(
                 f"{chart_id} annotation position", tags, bool_tags=BOOL_TAGS
             ),
@@ -232,6 +245,7 @@ class Area(Chart):
     fill_color: str | None = None
     line_style: LineStyle | None = None
     markers: MarkerStyle | None = None
+    opacity: float | None = None
 
     @classmethod
     def parse(
@@ -255,6 +269,7 @@ class Area(Chart):
             fill_color=fill_color,
             line_style=ls,
             markers=_parse_markers(tags, chart_id),
+            opacity=_get_opacity(tags, chart_id),
         )
 
 
@@ -262,6 +277,8 @@ class Area(Chart):
 class Box(Chart):
     id: ClassVar[str] = "box"
     marker_color: str | None = None
+    orientation: str | None = None
+    opacity: float | None = None
 
     @classmethod
     def parse(
@@ -271,22 +288,8 @@ class Box(Chart):
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             marker_color=get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS),
-        )
-
-
-@dataclass
-class Boxen(Chart):
-    id: ClassVar[str] = "boxen"
-    marker_color: str | None = None
-
-    @classmethod
-    def parse(
-        cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
-    ) -> Boxen:
-        return cls(
-            encoding=replace(encoding, y=column),
-            name=_get_name(tags, chart_id),
-            marker_color=get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS),
+            orientation=_get_orientation(tags, chart_id),
+            opacity=_get_opacity(tags, chart_id),
         )
 
 
@@ -299,6 +302,7 @@ class Violin(Chart):
     side: str | None = None
     mean_line: bool = False
     opacity: float | None = None
+    orientation: str | None = None
 
     @classmethod
     def parse(
@@ -317,7 +321,8 @@ class Violin(Chart):
                 get_tag_value(f"{chart_id} mean line", tags, bool_tags=BOOL_TAGS)
                 or False
             ),
-            opacity=get_tag_value(f"{chart_id} opacity", tags, bool_tags=BOOL_TAGS),
+            opacity=_get_opacity(tags, chart_id),
+            orientation=_get_orientation(tags, chart_id),
         )
 
 
@@ -326,13 +331,14 @@ class Strip(Chart):
     id: ClassVar[str] = "strip"
     markers: MarkerStyle | None = None
     jitter: float | None = None
+    orientation: str | None = None
 
     @classmethod
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Strip:
         mc = get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS)
-        mo = get_tag_value(f"{chart_id} opacity", tags, bool_tags=BOOL_TAGS)
+        mo = _get_opacity(tags, chart_id)
         markers = None
         if mc is not None or mo is not None:
             markers = MarkerStyle(color=mc, opacity=mo)
@@ -341,23 +347,7 @@ class Strip(Chart):
             name=_get_name(tags, chart_id),
             markers=markers,
             jitter=get_tag_value(f"{chart_id} jitter", tags, bool_tags=BOOL_TAGS),
-        )
-
-
-@dataclass
-class Swarm(Chart):
-    id: ClassVar[str] = "swarm"
-    markers: MarkerStyle | None = None
-
-    @classmethod
-    def parse(
-        cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
-    ) -> Swarm:
-        mc = get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS)
-        return cls(
-            encoding=replace(encoding, y=column),
-            name=_get_name(tags, chart_id),
-            markers=MarkerStyle(color=mc) if mc is not None else None,
+            orientation=_get_orientation(tags, chart_id),
         )
 
 
@@ -421,6 +411,7 @@ class Hist(Chart):
     border: BorderStyle | None = None
     opacity: float | None = None
     annotation_position: str | None = None
+    orientation: str | None = None
 
     @classmethod
     def parse(
@@ -430,7 +421,8 @@ class Hist(Chart):
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             nbins=get_tag_value(f"{chart_id} nbins", tags, bool_tags=BOOL_TAGS),
-            opacity=get_tag_value(f"{chart_id} opacity", tags, bool_tags=BOOL_TAGS),
+            opacity=_get_opacity(tags, chart_id),
+            orientation=_get_orientation(tags, chart_id),
         )
 
 
@@ -454,6 +446,7 @@ class ECDF(Chart):
     complementary: bool = False
     markers: bool = False
     lines: bool = True
+    opacity: float | None = None
 
     @classmethod
     def parse(
@@ -471,6 +464,7 @@ class ECDF(Chart):
                 get_tag_value(f"{chart_id} markers", tags, bool_tags=BOOL_TAGS) or False
             ),
             lines=lines_val if lines_val is not None else True,
+            opacity=_get_opacity(tags, chart_id),
         )
 
 
@@ -498,6 +492,7 @@ class Rug(Chart):
 class Density(Chart):
     id: ClassVar[str] = "density"
     line_style: LineStyle | None = None
+    opacity: float | None = None
 
     @classmethod
     def parse(
@@ -512,6 +507,7 @@ class Density(Chart):
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             line_style=ls,
+            opacity=_get_opacity(tags, chart_id),
         )
 
 
@@ -567,7 +563,7 @@ class BarPolar(Chart):
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             border=_parse_border(tags, chart_id),
-            opacity=get_tag_value(f"{chart_id} opacity", tags, bool_tags=BOOL_TAGS),
+            opacity=_get_opacity(tags, chart_id),
         )
 
 
@@ -655,6 +651,7 @@ class ScatterTernary(Chart):
 class Pie(Chart):
     id: ClassVar[str] = "pie"
     sort: bool = False
+    opacity: float | None = None
 
     @classmethod
     def parse(
@@ -662,6 +659,7 @@ class Pie(Chart):
     ) -> Pie:
         return cls(
             encoding=replace(encoding, names=encoding.x, values=column, x=None),
+            opacity=_get_opacity(tags, chart_id),
         )
 
 
@@ -680,7 +678,7 @@ class Funnel(Chart):
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             border=_parse_border(tags, chart_id),
-            opacity=get_tag_value(f"{chart_id} opacity", tags, bool_tags=BOOL_TAGS),
+            opacity=_get_opacity(tags, chart_id),
             annotation_position=get_tag_value(
                 f"{chart_id} annotation position", tags, bool_tags=BOOL_TAGS
             ),
@@ -699,7 +697,7 @@ class FunnelArea(Chart):
     ) -> FunnelArea:
         return cls(
             encoding=replace(encoding, names=encoding.x, values=column, x=None),
-            opacity=get_tag_value(f"{chart_id} opacity", tags, bool_tags=BOOL_TAGS),
+            opacity=_get_opacity(tags, chart_id),
             text_info=get_tag_value(f"{chart_id} text info", tags, bool_tags=BOOL_TAGS),
         )
 
@@ -713,6 +711,7 @@ class Treemap(Chart):
     id: ClassVar[str] = "treemap"
     maxdepth: int | None = None
     branchvalues: str | None = None
+    opacity: float | None = None
 
     @classmethod
     def parse(
@@ -724,6 +723,7 @@ class Treemap(Chart):
             branchvalues=get_tag_value(
                 f"{chart_id} branchvalues", tags, bool_tags=BOOL_TAGS
             ),
+            opacity=_get_opacity(tags, chart_id),
         )
 
 
@@ -732,6 +732,7 @@ class Sunburst(Chart):
     id: ClassVar[str] = "sunburst"
     maxdepth: int | None = None
     branchvalues: str | None = None
+    opacity: float | None = None
 
     @classmethod
     def parse(
@@ -743,6 +744,7 @@ class Sunburst(Chart):
             branchvalues=get_tag_value(
                 f"{chart_id} branchvalues", tags, bool_tags=BOOL_TAGS
             ),
+            opacity=_get_opacity(tags, chart_id),
         )
 
 
@@ -751,6 +753,7 @@ class Icicle(Chart):
     id: ClassVar[str] = "icicle"
     maxdepth: int | None = None
     branchvalues: str | None = None
+    opacity: float | None = None
 
     @classmethod
     def parse(
@@ -762,6 +765,7 @@ class Icicle(Chart):
             branchvalues=get_tag_value(
                 f"{chart_id} branchvalues", tags, bool_tags=BOOL_TAGS
             ),
+            opacity=_get_opacity(tags, chart_id),
         )
 
 
@@ -840,7 +844,7 @@ class Timeline(Chart):
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             border=_parse_border(tags, chart_id),
-            opacity=get_tag_value(f"{chart_id} opacity", tags, bool_tags=BOOL_TAGS),
+            opacity=_get_opacity(tags, chart_id),
         )
 
 

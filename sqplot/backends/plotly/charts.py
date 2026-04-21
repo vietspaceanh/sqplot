@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sqplot import specs
 from .utils import (
+    apply_opacity,
     border_style_update,
     build_style_maps,
     color_with_alpha,
@@ -13,6 +14,7 @@ from .utils import (
     has_duplicate_x,
     line_style_update,
     marker_style_update,
+    orient_xy,
     trace_name,
 )
 
@@ -93,6 +95,8 @@ def line(df: pd.DataFrame, spec: specs.Line) -> go.Figure:
             _apply_line_spec(trace, spec, gdf)
             if style_col and dash != "solid":
                 trace.line.dash = dash
+            if spec.opacity is not None:
+                trace.opacity = spec.opacity
             fig.add_trace(trace)
 
     return fig
@@ -145,18 +149,11 @@ def scatter(df: pd.DataFrame, spec: specs.Scatter) -> go.Figure:
 
 
 def bar(df: pd.DataFrame, spec: specs.Bar) -> go.Figure:
-    x_col = spec.encoding.x
-    params = common_params(spec.encoding)
-    if spec.orientation == "h":
-        params["orientation"] = "h"
-        fig = px.histogram(df, x=spec.encoding.y, y=x_col, histfunc="avg", **params)
-    else:
-        fig = px.histogram(df, x=x_col, y=spec.encoding.y, histfunc="avg", **params)
+    params = common_params(spec.encoding) | orient_xy(spec.encoding, spec.orientation)
+    fig = px.histogram(df, histfunc="avg", **params)
     update = {}
     if spec.color:
         update["marker_color"] = spec.color
-    if spec.opacity is not None:
-        update["marker_opacity"] = spec.opacity
     update.update(border_style_update(spec.border))
     if spec.bar_width is not None:
         update["width"] = spec.bar_width
@@ -165,6 +162,7 @@ def bar(df: pd.DataFrame, spec: specs.Bar) -> go.Figure:
     if spec.annotation_position:
         update["textposition"] = spec.annotation_position
     fig.update_traces(**update)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
@@ -188,48 +186,47 @@ def area(df: pd.DataFrame, spec: specs.Area) -> go.Figure:
     if spec.name:
         update.update(name=spec.name, showlegend=True)
     fig.update_traces(**update)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
 def box(df: pd.DataFrame, spec: specs.Box) -> go.Figure:
-    fig = px.box(
-        df, x=spec.encoding.x, y=spec.encoding.y, **common_params(spec.encoding)
-    )
+    params = common_params(spec.encoding) | orient_xy(spec.encoding, spec.orientation)
+    fig = px.box(df, **params)
     update = {}
     if spec.marker_color:
         update["marker_color"] = spec.marker_color
     if spec.name:
         update.update(name=spec.name, showlegend=True)
     fig.update_traces(**update)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
 def violin(df: pd.DataFrame, spec: specs.Violin) -> go.Figure:
-    params = common_params(spec.encoding)
+    params = common_params(spec.encoding) | orient_xy(spec.encoding, spec.orientation)
     if spec.box:
         params["box"] = True
     if spec.points:
         params["points"] = spec.points
     if spec.side:
         params["side"] = spec.side
-    fig = px.violin(df, x=spec.encoding.x, y=spec.encoding.y, **params)
+    fig = px.violin(df, **params)
     update = {}
     if spec.marker_color:
         update["marker_color"] = spec.marker_color
     if spec.mean_line:
         update["meanline_visible"] = True
-    if spec.opacity is not None:
-        update["marker_opacity"] = spec.opacity
     if spec.name:
         update.update(name=spec.name, showlegend=True)
     fig.update_traces(**update)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
 def strip(df: pd.DataFrame, spec: specs.Strip) -> go.Figure:
-    fig = px.strip(
-        df, x=spec.encoding.x, y=spec.encoding.y, **common_params(spec.encoding)
-    )
+    params = common_params(spec.encoding) | orient_xy(spec.encoding, spec.orientation)
+    fig = px.strip(df, **params)
     update = {}
     if spec.markers:
         if spec.markers.color:
@@ -248,13 +245,16 @@ def hist(df: pd.DataFrame, spec: specs.Hist) -> go.Figure:
     params = common_params(spec.encoding)
     if spec.nbins is not None:
         params["nbins"] = spec.nbins
-    fig = px.histogram(df, x=spec.encoding.y, **params)
+    if spec.orientation == "h":
+        params["orientation"] = "h"
+        fig = px.histogram(df, y=spec.encoding.y, **params)
+    else:
+        fig = px.histogram(df, x=spec.encoding.y, **params)
     update = {"marker_line_width": 1}
-    if spec.opacity is not None:
-        update["marker_opacity"] = spec.opacity
     if spec.name:
         update.update(name=spec.name, showlegend=True)
     fig.update_traces(**update)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
@@ -267,6 +267,7 @@ def ecdf(df: pd.DataFrame, spec: specs.ECDF) -> go.Figure:
     if spec.markers:
         params["markers"] = True
     fig = px.ecdf(df, x=spec.encoding.y, **params)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
@@ -315,11 +316,9 @@ def density(df: pd.DataFrame, spec: specs.Density) -> go.Figure:
         kde_params["color"] = color_col
     fig = px.area(kde_df, x=y_col, y="density", **kde_params)
     for t in fig.data:
-        c = t.line.color
-        r, g, b = int(c[1:3], 16), int(c[3:5], 16), int(c[5:7], 16)
         t.stackgroup = None
         t.fill = "tozeroy"
-        t.fillcolor = f"rgba({r},{g},{b},0.3)"
+    apply_opacity(fig, spec.opacity if spec.opacity is not None else 0.3)
 
     update = line_style_update(spec.line_style)
     if spec.name:
@@ -341,6 +340,7 @@ def heatmap(df: pd.DataFrame, spec: specs.Heatmap) -> go.Figure:
 def pie(df: pd.DataFrame, spec: specs.Pie) -> go.Figure:
     fig = px.pie(df, names=spec.encoding.names, values=spec.encoding.values)
     fig.update_traces(sort=spec.sort)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
@@ -348,14 +348,12 @@ def funnel(df: pd.DataFrame, spec: specs.Funnel) -> go.Figure:
     fig = px.funnel(df, x=spec.encoding.y, y=spec.encoding.x)
     update = {}
     update.update(border_style_update(spec.border))
-    if spec.opacity is not None:
-        update["marker_opacity"] = spec.opacity
     if spec.name:
         update.update(name=spec.name, showlegend=True)
     if spec.annotation_position:
         update["textposition"] = spec.annotation_position
-    if update:
-        fig.update_traces(**update)
+    fig.update_traces(**update)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
@@ -366,8 +364,7 @@ def funnel_area(df: pd.DataFrame, spec: specs.FunnelArea) -> go.Figure:
     fig = px.funnel_area(
         df, names=spec.encoding.names, values=spec.encoding.values, **params
     )
-    if spec.opacity is not None:
-        fig.update_traces(marker_opacity=spec.opacity)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
@@ -380,8 +377,12 @@ def treemap(df: pd.DataFrame, spec: specs.Treemap) -> go.Figure:
     if spec.maxdepth is not None:
         params["maxdepth"] = spec.maxdepth
     fig = px.treemap(df, **params)
+    update = {}
     if spec.branchvalues:
-        fig.update_traces(branchvalues=spec.branchvalues)
+        update["branchvalues"] = spec.branchvalues
+    if update:
+        fig.update_traces(**update)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
@@ -394,8 +395,12 @@ def sunburst(df: pd.DataFrame, spec: specs.Sunburst) -> go.Figure:
     if spec.maxdepth is not None:
         params["maxdepth"] = spec.maxdepth
     fig = px.sunburst(df, **params)
+    update = {}
     if spec.branchvalues:
-        fig.update_traces(branchvalues=spec.branchvalues)
+        update["branchvalues"] = spec.branchvalues
+    if update:
+        fig.update_traces(**update)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
@@ -408,8 +413,12 @@ def icicle(df: pd.DataFrame, spec: specs.Icicle) -> go.Figure:
     if spec.maxdepth is not None:
         params["maxdepth"] = spec.maxdepth
     fig = px.icicle(df, **params)
+    update = {}
     if spec.branchvalues:
-        fig.update_traces(branchvalues=spec.branchvalues)
+        update["branchvalues"] = spec.branchvalues
+    if update:
+        fig.update_traces(**update)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
@@ -465,12 +474,10 @@ def timeline(df: pd.DataFrame, spec: specs.Timeline) -> go.Figure:
     )
     update = {}
     update.update(border_style_update(spec.border))
-    if spec.opacity is not None:
-        update["marker_opacity"] = spec.opacity
     if spec.name:
         update.update(name=spec.name, showlegend=True)
-    if update:
-        fig.update_traces(**update)
+    fig.update_traces(**update)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
@@ -492,7 +499,9 @@ def bar_polar(df: pd.DataFrame, spec: specs.BarPolar) -> go.Figure:
     params = {}
     if spec.encoding.color:
         params["color"] = spec.encoding.color
-    return px.bar_polar(df, r=spec.encoding.y, theta=spec.encoding.x, **params)
+    fig = px.bar_polar(df, r=spec.encoding.y, theta=spec.encoding.x, **params)
+    apply_opacity(fig, spec.opacity)
+    return fig
 
 
 def line_3d(df: pd.DataFrame, spec: specs.Line3D) -> go.Figure:

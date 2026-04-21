@@ -1,3 +1,4 @@
+import plotly.graph_objects as go
 import pandas as pd
 import plotly.express as px
 import plotly.io as pio
@@ -80,6 +81,12 @@ def common_params(encoding: specs.Encoding) -> dict:
     return params
 
 
+def orient_xy(encoding: specs.Encoding, orientation: str | None) -> dict:
+    if orientation == "h":
+        return {"x": encoding.y, "y": encoding.x, "orientation": "h"}
+    return {"x": encoding.x, "y": encoding.y}
+
+
 def get_colorway() -> list[str]:
     return (
         pio.templates[pio.templates.default].layout.colorway
@@ -92,6 +99,28 @@ def color_with_alpha(hex_color: str, alpha: float) -> str:
     g = int(hex_color[3:5], 16)
     b = int(hex_color[5:7], 16)
     return f"rgba({r},{g},{b},{alpha})"
+
+
+def apply_opacity(fig: go.Figure, opacity: float | None) -> None:
+    if opacity is None:
+        return
+    fig.update_traces(marker_opacity=opacity)
+    for t in fig.data:
+        c = (
+            getattr(t.marker, "color", None)
+            or getattr(t, "marker_color", None)
+            or getattr(t.line, "color", None)
+        )
+        if isinstance(c, str) and c.startswith("#"):
+            rgba = color_with_alpha(c, opacity)
+            try:
+                t.fillcolor = rgba
+            except ValueError:
+                pass
+            try:
+                t.line.color = rgba
+            except (ValueError, AttributeError):
+                pass
 
 
 def has_duplicate_x(
