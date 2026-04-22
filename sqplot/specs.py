@@ -85,7 +85,9 @@ class ErrorBar:
 
 # ── Parse helpers ─────────────────────────────────────────────────────────────
 
-BOOL_TAGS = frozenset({"stacked", "grouped", "horizontal", "dashed", "dotted"})
+BOOL_TAGS = frozenset(
+    {"stacked", "grouped", "horizontal", "dashed", "dotted", "numbered"}
+)
 
 
 def _get_name(tags: list[str], prefix: str) -> str | None:
@@ -172,6 +174,10 @@ class Chart:
     encoding: Encoding
     name: str | None = None
 
+    @classmethod
+    def build(cls, **kwargs):
+        return cls(**{k: v for k, v in kwargs.items() if v is not None})
+
 
 # ── XY Family ────────────────────────────────────────────────────────────────
 # encoding.x, encoding.y, optionally encoding.color
@@ -190,7 +196,7 @@ class Line(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Line:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             line_style=_parse_line_style(tags, chart_id),
@@ -210,7 +216,7 @@ class Scatter(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Scatter:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             markers=_parse_scatter_markers(tags, chart_id),
@@ -232,7 +238,7 @@ class Bar(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Bar:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             color=get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS),
@@ -258,23 +264,11 @@ class Area(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Area:
-        fill_color = get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS)
-        lp = f"{chart_id} line"
-        lc = get_tag_value(f"{lp} color", tags, bool_tags=BOOL_TAGS)
-        lw = get_tag_value(f"{lp} size", tags, bool_tags=BOOL_TAGS)
-        ld = get_tag_value(f"{lp} dash", tags, bool_tags=BOOL_TAGS)
-        if get_tag_value(f"{lp} dashed", tags, bool_tags=BOOL_TAGS):
-            ld = "dash"
-        if get_tag_value(f"{lp} dotted", tags, bool_tags=BOOL_TAGS):
-            ld = "dot"
-        ls = None
-        if any(v is not None for v in [lc, lw, ld]):
-            ls = LineStyle(color=lc, width=lw, dash=ld)
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
-            fill_color=fill_color,
-            line_style=ls,
+            fill_color=get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS),
+            line_style=_parse_line_style(tags, f"{chart_id} line"),
             markers=_parse_markers(tags, chart_id),
             opacity=_get_opacity(tags, chart_id),
         )
@@ -291,7 +285,7 @@ class Box(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Box:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             marker_color=get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS),
@@ -315,19 +309,14 @@ class Violin(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Violin:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             marker_color=get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS),
-            box=bool(
-                get_tag_value(f"{chart_id} box", tags, bool_tags=BOOL_TAGS) or False
-            ),
+            box=get_tag_value(f"{chart_id} box", tags, bool_tags=BOOL_TAGS),
             points=get_tag_value(f"{chart_id} points", tags, bool_tags=BOOL_TAGS),
             side=get_tag_value(f"{chart_id} side", tags, bool_tags=BOOL_TAGS),
-            mean_line=bool(
-                get_tag_value(f"{chart_id} mean line", tags, bool_tags=BOOL_TAGS)
-                or False
-            ),
+            mean_line=get_tag_value(f"{chart_id} mean line", tags, bool_tags=BOOL_TAGS),
             opacity=_get_opacity(tags, chart_id),
             orientation=_get_orientation(tags, chart_id),
         )
@@ -349,7 +338,7 @@ class Strip(Chart):
         markers = None
         if mc is not None or mo is not None:
             markers = MarkerStyle(color=mc, opacity=mo)
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             markers=markers,
@@ -368,7 +357,7 @@ class Point(Chart):
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Point:
         mc = get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS)
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             markers=MarkerStyle(color=mc) if mc is not None else None,
@@ -380,16 +369,18 @@ class Heatmap(Chart):
     id: ClassVar[str] = "heatmap"
     nbinsx: int | None = None
     nbinsy: int | None = None
+    numbered: bool = True
 
     @classmethod
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Heatmap:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             nbinsx=get_tag_value(f"{chart_id} nbinsx", tags, bool_tags=BOOL_TAGS),
             nbinsy=get_tag_value(f"{chart_id} nbinsy", tags, bool_tags=BOOL_TAGS),
+            numbered=get_tag_value(f"{chart_id} numbered", tags, bool_tags=BOOL_TAGS),
         )
 
 
@@ -401,7 +392,7 @@ class Resid(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Resid:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
         )
@@ -424,7 +415,7 @@ class Hist(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Hist:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             nbins=get_tag_value(f"{chart_id} nbins", tags, bool_tags=BOOL_TAGS),
@@ -441,7 +432,7 @@ class Count(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Count:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
         )
@@ -459,18 +450,14 @@ class ECDF(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> ECDF:
-        lines_val = get_tag_value(f"{chart_id} lines", tags, bool_tags=BOOL_TAGS)
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
-            complementary=bool(
-                get_tag_value(f"{chart_id} complementary", tags, bool_tags=BOOL_TAGS)
-                or False
+            complementary=get_tag_value(
+                f"{chart_id} complementary", tags, bool_tags=BOOL_TAGS
             ),
-            markers=bool(
-                get_tag_value(f"{chart_id} markers", tags, bool_tags=BOOL_TAGS) or False
-            ),
-            lines=lines_val if lines_val is not None else True,
+            markers=get_tag_value(f"{chart_id} markers", tags, bool_tags=BOOL_TAGS),
+            lines=get_tag_value(f"{chart_id} lines", tags, bool_tags=BOOL_TAGS),
             opacity=_get_opacity(tags, chart_id),
         )
 
@@ -484,7 +471,7 @@ class Rug(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Rug:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             height=get_tag_value(f"{chart_id} height", tags, bool_tags=BOOL_TAGS),
@@ -510,7 +497,7 @@ class Density(Chart):
         ls = None
         if color is not None or width is not None:
             ls = LineStyle(color=color, width=width)
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             line_style=ls,
@@ -532,7 +519,7 @@ class LinePolar(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> LinePolar:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             line_style=_parse_line_style(tags, chart_id),
@@ -549,7 +536,7 @@ class ScatterPolar(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> ScatterPolar:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             markers=_parse_scatter_markers(tags, chart_id),
@@ -566,7 +553,7 @@ class BarPolar(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> BarPolar:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             border=_parse_border(tags, chart_id),
@@ -588,7 +575,7 @@ class Line3D(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Line3D:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, z=column),
             name=_get_name(tags, chart_id),
             line_style=_parse_line_style(tags, chart_id),
@@ -605,7 +592,7 @@ class Scatter3D(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Scatter3D:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, z=column),
             name=_get_name(tags, chart_id),
             markers=_parse_scatter_markers(tags, chart_id),
@@ -626,7 +613,7 @@ class LineTernary(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> LineTernary:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, a=column),
             name=_get_name(tags, chart_id),
             line_style=_parse_line_style(tags, chart_id),
@@ -643,7 +630,7 @@ class ScatterTernary(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> ScatterTernary:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, a=column),
             name=_get_name(tags, chart_id),
             markers=_parse_scatter_markers(tags, chart_id),
@@ -664,7 +651,7 @@ class Pie(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Pie:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, names=encoding.x, values=column, x=None),
             opacity=_get_opacity(tags, chart_id),
         )
@@ -681,7 +668,7 @@ class Funnel(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Funnel:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             border=_parse_border(tags, chart_id),
@@ -702,7 +689,7 @@ class FunnelArea(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> FunnelArea:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, names=encoding.x, values=column, x=None),
             opacity=_get_opacity(tags, chart_id),
             text_info=get_tag_value(f"{chart_id} text info", tags, bool_tags=BOOL_TAGS),
@@ -724,7 +711,7 @@ class Treemap(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Treemap:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, values=column),
             maxdepth=get_tag_value(f"{chart_id} maxdepth", tags, bool_tags=BOOL_TAGS),
             branchvalues=get_tag_value(
@@ -745,7 +732,7 @@ class Sunburst(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Sunburst:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, values=column),
             maxdepth=get_tag_value(f"{chart_id} maxdepth", tags, bool_tags=BOOL_TAGS),
             branchvalues=get_tag_value(
@@ -766,7 +753,7 @@ class Icicle(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Icicle:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, values=column),
             maxdepth=get_tag_value(f"{chart_id} maxdepth", tags, bool_tags=BOOL_TAGS),
             branchvalues=get_tag_value(
@@ -789,10 +776,11 @@ class ScatterMatrix(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> ScatterMatrix:
-        diag = get_tag_value(f"{chart_id} diagonal", tags, bool_tags=BOOL_TAGS)
-        return cls(
+        return cls.build(
             encoding=encoding,
-            diagonal_visible=diag if diag is not None else True,
+            diagonal_visible=get_tag_value(
+                f"{chart_id} diagonal", tags, bool_tags=BOOL_TAGS
+            ),
         )
 
 
@@ -806,7 +794,7 @@ class ParallelCategories(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> ParallelCategories:
-        return cls(
+        return cls.build(
             encoding=encoding,
             line_color=get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS),
             line_shape=get_tag_value(
@@ -825,7 +813,7 @@ class ParallelCoordinates(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> ParallelCoordinates:
-        return cls(
+        return cls.build(
             encoding=encoding,
             line_color=get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS),
             line_shape=get_tag_value(
@@ -847,7 +835,7 @@ class Timeline(Chart):
     def parse(
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Timeline:
-        return cls(
+        return cls.build(
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             border=_parse_border(tags, chart_id),
