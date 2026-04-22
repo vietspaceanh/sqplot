@@ -19,6 +19,7 @@ class Encoding:
     color: str | None = None
     size: str | None = None
     style: str | None = None
+    text: str | None = None
 
     facet_row: str | None = None
     facet_col: str | None = None

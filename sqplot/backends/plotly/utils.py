@@ -68,17 +68,81 @@ def build_style_maps(style_values) -> dict:
     }
 
 
-def common_params(encoding: specs.Encoding) -> dict:
+def common_params(spec) -> dict:
+    enc = spec.encoding
     params = {}
-    if encoding.color:
-        params["color"] = encoding.color
-    if encoding.facet_row:
-        params["facet_row"] = encoding.facet_row
+    if enc.color:
+        params["color"] = enc.color
+    if enc.text and isinstance(
+        spec,
+        (
+            specs.Scatter,
+            specs.ScatterPolar,
+            specs.Scatter3D,
+            specs.ScatterTernary,
+            specs.LinePolar,
+            specs.Line3D,
+            specs.LineTernary,
+            specs.Area,
+            specs.Bar,
+            specs.BarPolar,
+            specs.ECDF,
+        ),
+    ):
+        params["text"] = enc.text
+    if enc.style:
+        if isinstance(
+            spec,
+            (
+                specs.Scatter,
+                specs.ScatterPolar,
+                specs.Scatter3D,
+                specs.ScatterTernary,
+            ),
+        ):
+            params["symbol"] = enc.style
+        elif isinstance(spec, (specs.Bar, specs.BarPolar, specs.Area)):
+            params["pattern_shape"] = enc.style
+        elif isinstance(
+            spec,
+            (
+                specs.Line,
+                specs.ECDF,
+                specs.LinePolar,
+                specs.Line3D,
+                specs.LineTernary,
+            ),
+        ):
+            params["line_dash"] = enc.style
+    if enc.size and isinstance(
+        spec,
+        (
+            specs.Scatter,
+            specs.ScatterPolar,
+            specs.Scatter3D,
+            specs.ScatterTernary,
+        ),
+    ):
+        params["size"] = enc.size
+    if enc.facet_row:
+        params["facet_row"] = enc.facet_row
         params["facet_row_spacing"] = 0.12
-    if encoding.facet_col:
-        params["facet_col"] = encoding.facet_col
+    if enc.facet_col:
+        params["facet_col"] = enc.facet_col
         params["facet_col_spacing"] = 0.12
     return params
+
+
+def dim_cols(spec) -> list[str]:
+    enc = spec.encoding
+    return [c for c in [enc.x, enc.color, enc.style, enc.facet_row, enc.facet_col] if c]
+
+
+def has_duplicates(df: pd.DataFrame, spec) -> bool:
+    gc = dim_cols(spec)
+    if not gc:
+        return False
+    return df.groupby(gc)[spec.encoding.y].count().gt(1).any()
 
 
 def orient_xy(encoding: specs.Encoding, orientation: str | None) -> dict:
@@ -104,19 +168,6 @@ def color_with_alpha(hex_color: str, alpha: float) -> str:
 def apply_opacity(fig: go.Figure, opacity: float | None) -> None:
     if opacity is not None:
         fig.update_traces(opacity=opacity)
-
-
-def has_duplicate_x(
-    df: pd.DataFrame,
-    x_col: str | None,
-    color_col: str | None,
-    y_col: str,
-    style_col: str | None = None,
-) -> bool:
-    if not x_col:
-        return False
-    group_cols = [c for c in [x_col, color_col, style_col] if c]
-    return df.groupby(group_cols)[y_col].count().gt(1).any()
 
 
 def group_mask(

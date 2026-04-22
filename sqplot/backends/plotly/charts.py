@@ -9,9 +9,10 @@ from .utils import (
     build_style_maps,
     color_with_alpha,
     common_params,
+    dim_cols,
     get_colorway,
     group_mask,
-    has_duplicate_x,
+    has_duplicates,
     line_style_update,
     marker_style_update,
     orient_xy,
@@ -25,122 +26,109 @@ def line(df: pd.DataFrame, spec: specs.Line) -> go.Figure:
     color_col = spec.encoding.color
     style_col = spec.encoding.style
 
-    dupes = has_duplicate_x(df, x_col, color_col, y_col, style_col)
+    dupes = has_duplicates(df, spec)
 
     if dupes:
-        group_cols = [c for c in [x_col, color_col, style_col] if c]
-        plot_df = (
-            df.groupby(group_cols)
-            .agg(y_mean=(y_col, "mean"), y_std=(y_col, "std"))
+        std_col = "__line_std__"
+        gc = dim_cols(spec)
+        agg_df = (
+            df.groupby(gc)
+            .agg(**{y_col: (y_col, "mean"), std_col: (y_col, "std")})
             .reset_index()
         )
-        plot_df["y_std"] = plot_df["y_std"].fillna(0)
+        agg_df[std_col] = agg_df[std_col].fillna(0)
     else:
-        plot_df = None
+        agg_df = None
 
-    fig = go.Figure()
-    colorway = get_colorway()
-    band_opacity = spec.error_band.opacity if spec.error_band else 0.2
+    params = common_params(spec)
+    fig = px.line(agg_df if dupes else df, x=x_col, y=y_col, **params)
 
-    color_groups = list(df[color_col].unique()) if color_col else [None]
-    style_groups = list(df[style_col].unique()) if style_col else [None]
-    smaps = build_style_maps(df[style_col].unique()) if style_col else {}
-    fallback = spec.name or y_col
+    if dupes:
+        band_opacity = spec.error_band.opacity if spec.error_band else 0.2
 
-    for ci, cv in enumerate(color_groups):
-        color = colorway[ci % len(colorway)]
-        for sv in style_groups:
-            if dupes:
-                mask = group_mask(plot_df, color_col, style_col, cv, sv)
-                gdf = plot_df[mask].sort_values(x_col)
-                y_data = gdf["y_mean"]
-            else:
-                mask = group_mask(df, color_col, style_col, cv, sv)
-                gdf = df[mask]
-                y_data = gdf[y_col]
+        for trace in list(fig.data):
+            trace_df = pd.DataFrame({x_col: trace.x, y_col: trace.y})
+            matched = trace_df.merge(
+                agg_df[[x_col, y_col, std_col]], on=[x_col, y_col]
+            ).sort_values(x_col)
 
-            if len(gdf) == 0:
+            if matched.empty:
                 continue
 
-            tname = trace_name(cv, sv, fallback)
-            dash, symbol = (
-                smaps.get(sv, ("solid", "circle")) if style_col else ("solid", "circle")
-            )
+            upper = matched[y_col] + matched[std_col]
+            lower = matched[y_col] - matched[std_col]
+            line_color = getattr(trace.line, "color", None) or get_colorway()[0]
 
-            if dupes:
-                upper = y_data + gdf["y_std"]
-                lower = y_data - gdf["y_std"]
-                fig.add_trace(
-                    go.Scatter(
-                        x=pd.concat([gdf[x_col], gdf[x_col].iloc[::-1]]),
-                        y=pd.concat([upper, lower.iloc[::-1]]),
-                        fill="toself",
-                        fillcolor=color_with_alpha(color, band_opacity),
-                        line=dict(color="rgba(0,0,0,0)"),
-                        hoverinfo="skip",
-                        showlegend=False,
-                        legendgroup=tname,
-                    )
+            fig.add_trace(
+                go.Scatter(
+                    x=pd.concat([matched[x_col], matched[x_col].iloc[::-1]]),
+                    y=pd.concat([upper, lower.iloc[::-1]]),
+                    fill="toself",
+                    fillcolor=color_with_alpha(line_color, band_opacity),
+                    line=dict(color="rgba(0,0,0,0)"),
+                    hoverinfo="skip",
+                    showlegend=False,
+                    legendgroup=trace.legendgroup,
+                    xaxis=trace.xaxis,
+                    yaxis=trace.yaxis,
                 )
-
-            trace = go.Scatter(
-                x=gdf[x_col],
-                y=y_data,
-                mode="lines+markers",
-                name=tname,
-                legendgroup=tname,
-                line=dict(color=color, dash=dash),
-                marker=dict(symbol=symbol, color=color),
             )
-            _apply_line_spec(trace, spec, gdf)
-            if style_col and dash != "solid":
-                trace.line.dash = dash
-            if spec.opacity is not None:
-                trace.opacity = spec.opacity
-            fig.add_trace(trace)
+
+    fig.update_traces(mode="lines+markers")
+    update = {}
+    update.update(**line_style_update(spec.line_style))
+    update.update(**marker_style_update(spec.markers))
+    if spec.opacity is not None:
+        update["opacity"] = spec.opacity
+    fig.update_traces(**update)
+
+    if spec.error_bar:
+        _apply_error_bars(fig, spec, agg_df if dupes else df)
+
+    if spec.name:
+        fig.update_traces(name=spec.name, showlegend=True)
 
     return fig
 
 
-def _apply_line_spec(trace: go.Scatter, spec: specs.Line, gdf: pd.DataFrame) -> None:
-    trace.update(**line_style_update(spec.line_style))
-    trace.update(**marker_style_update(spec.markers))
-    if spec.error_bar:
-        eb_y = spec.error_bar.y
-        eb_y_minus = spec.error_bar.y_minus
+def _apply_error_bars(fig: go.Figure, spec: specs.Line, data: pd.DataFrame) -> None:
+    eb_y = spec.error_bar.y
+    eb_y_minus = spec.error_bar.y_minus
+    for trace in fig.data:
+        if hasattr(trace, "error_y") and trace.error_y is not None:
+            continue
+        n = len(trace.y) if hasattr(trace, "y") and trace.y is not None else 0
+        if n == 0:
+            continue
         if isinstance(eb_y, str):
-            trace.error_y = dict(type="data", array=gdf[eb_y].tolist(), visible=True)
+            trace.error_y = dict(
+                type="data", array=data[eb_y].tolist()[:n], visible=True
+            )
         elif isinstance(eb_y, (int, float)):
             if eb_y_minus is not None:
                 trace.error_y = dict(
                     type="data",
                     symmetric=False,
                     arrayminus=(
-                        gdf[eb_y_minus].tolist()
+                        data[eb_y_minus].tolist()[:n]
                         if isinstance(eb_y_minus, str)
-                        else [eb_y_minus] * len(gdf)
+                        else [eb_y_minus] * n
                     ),
-                    array=[eb_y] * len(gdf),
+                    array=[eb_y] * n,
                     visible=True,
                 )
             else:
                 trace.error_y = dict(
-                    type="data",
-                    symmetric=True,
-                    array=[eb_y] * len(gdf),
-                    visible=True,
+                    type="data", symmetric=True, array=[eb_y] * n, visible=True
                 )
         elif isinstance(eb_y, list):
-            trace.error_y = dict(type="data", symmetric=True, array=eb_y, visible=True)
-    if spec.name:
-        trace.name = spec.name
-        trace.showlegend = True
+            trace.error_y = dict(
+                type="data", symmetric=True, array=eb_y[:n], visible=True
+            )
 
 
 def scatter(df: pd.DataFrame, spec: specs.Scatter) -> go.Figure:
-    params = common_params(spec.encoding)
-    if spec.encoding.style:
-        params["symbol"] = spec.encoding.style
+    params = common_params(spec)
     fig = px.scatter(df, x=spec.encoding.x, y=spec.encoding.y, **params)
     update = marker_style_update(spec.markers)
     if spec.name:
@@ -151,8 +139,28 @@ def scatter(df: pd.DataFrame, spec: specs.Scatter) -> go.Figure:
 
 
 def bar(df: pd.DataFrame, spec: specs.Bar) -> go.Figure:
-    params = common_params(spec.encoding) | orient_xy(spec.encoding, spec.orientation)
-    fig = px.histogram(df, histfunc="avg", **params)
+    y_col = spec.encoding.y
+    dupes = has_duplicates(df, spec)
+    params = common_params(spec) | orient_xy(spec.encoding, spec.orientation)
+
+    if dupes:
+        std_col = "__bar_std__"
+        agg_df = (
+            df.groupby(dim_cols(spec))
+            .agg(**{y_col: (y_col, "mean"), std_col: (y_col, "std")})
+            .reset_index()
+        )
+        agg_df[std_col] = agg_df[std_col].fillna(0)
+        err_key = "error_x" if spec.orientation == "h" else "error_y"
+        params[err_key] = std_col
+        fig = px.bar(agg_df, **params)
+        if spec.orientation == "h":
+            fig.update_xaxes(title_text=f"avg of {y_col}")
+        else:
+            fig.update_yaxes(title_text=f"avg of {y_col}")
+    else:
+        fig = px.bar(df, **params)
+
     update = {}
     if spec.color:
         update["marker_color"] = spec.color
@@ -169,9 +177,7 @@ def bar(df: pd.DataFrame, spec: specs.Bar) -> go.Figure:
 
 
 def area(df: pd.DataFrame, spec: specs.Area) -> go.Figure:
-    fig = px.area(
-        df, x=spec.encoding.x, y=spec.encoding.y, **common_params(spec.encoding)
-    )
+    fig = px.area(df, x=spec.encoding.x, y=spec.encoding.y, **common_params(spec))
     update = {}
     if spec.fill_color:
         update["fillcolor"] = spec.fill_color
@@ -193,7 +199,7 @@ def area(df: pd.DataFrame, spec: specs.Area) -> go.Figure:
 
 
 def box(df: pd.DataFrame, spec: specs.Box) -> go.Figure:
-    params = common_params(spec.encoding) | orient_xy(spec.encoding, spec.orientation)
+    params = common_params(spec) | orient_xy(spec.encoding, spec.orientation)
     fig = px.box(df, **params)
     update = {}
     if spec.marker_color:
@@ -206,7 +212,7 @@ def box(df: pd.DataFrame, spec: specs.Box) -> go.Figure:
 
 
 def violin(df: pd.DataFrame, spec: specs.Violin) -> go.Figure:
-    params = common_params(spec.encoding) | orient_xy(spec.encoding, spec.orientation)
+    params = common_params(spec) | orient_xy(spec.encoding, spec.orientation)
     if spec.box:
         params["box"] = True
     if spec.points:
@@ -227,7 +233,7 @@ def violin(df: pd.DataFrame, spec: specs.Violin) -> go.Figure:
 
 
 def strip(df: pd.DataFrame, spec: specs.Strip) -> go.Figure:
-    params = common_params(spec.encoding) | orient_xy(spec.encoding, spec.orientation)
+    params = common_params(spec) | orient_xy(spec.encoding, spec.orientation)
     fig = px.strip(df, **params)
     update = {}
     if spec.markers:
@@ -244,7 +250,7 @@ def strip(df: pd.DataFrame, spec: specs.Strip) -> go.Figure:
 
 
 def hist(df: pd.DataFrame, spec: specs.Hist) -> go.Figure:
-    params = common_params(spec.encoding)
+    params = common_params(spec)
     if spec.nbins is not None:
         params["nbins"] = spec.nbins
     if spec.orientation == "h":
@@ -261,7 +267,7 @@ def hist(df: pd.DataFrame, spec: specs.Hist) -> go.Figure:
 
 
 def ecdf(df: pd.DataFrame, spec: specs.ECDF) -> go.Figure:
-    params = common_params(spec.encoding)
+    params = common_params(spec)
     if spec.complementary:
         params["complementary"] = True
     if not spec.lines:
@@ -293,9 +299,7 @@ def density(df: pd.DataFrame, spec: specs.Density) -> go.Figure:
 
     x_col = spec.encoding.x
     if x_col:
-        return px.density_contour(
-            df, x=x_col, y=spec.encoding.y, **common_params(spec.encoding)
-        )
+        return px.density_contour(df, x=x_col, y=spec.encoding.y, **common_params(spec))
 
     color_col = spec.encoding.color
     rows = []
@@ -331,7 +335,7 @@ def density(df: pd.DataFrame, spec: specs.Density) -> go.Figure:
 
 
 def heatmap(df: pd.DataFrame, spec: specs.Heatmap) -> go.Figure:
-    params = common_params(spec.encoding)
+    params = common_params(spec)
     if spec.nbinsx is not None:
         params["nbinsx"] = spec.nbinsx
     if spec.nbinsy is not None:
@@ -425,7 +429,7 @@ def icicle(df: pd.DataFrame, spec: specs.Icicle) -> go.Figure:
 
 
 def scatter_matrix(df: pd.DataFrame, spec: specs.ScatterMatrix) -> go.Figure:
-    params = common_params(spec.encoding)
+    params = common_params(spec)
     if spec.encoding.dim:
         params["dimensions"] = spec.encoding.dim
     fig = px.scatter_matrix(df, **params)
@@ -435,7 +439,7 @@ def scatter_matrix(df: pd.DataFrame, spec: specs.ScatterMatrix) -> go.Figure:
 
 
 def parallel_categories(df: pd.DataFrame, spec: specs.ParallelCategories) -> go.Figure:
-    params = common_params(spec.encoding)
+    params = common_params(spec)
     if spec.encoding.dim:
         params["dimensions"] = spec.encoding.dim
     fig = px.parallel_categories(df, **params)
@@ -452,7 +456,7 @@ def parallel_categories(df: pd.DataFrame, spec: specs.ParallelCategories) -> go.
 def parallel_coordinates(
     df: pd.DataFrame, spec: specs.ParallelCoordinates
 ) -> go.Figure:
-    params = common_params(spec.encoding)
+    params = common_params(spec)
     if spec.encoding.dim:
         params["dimensions"] = spec.encoding.dim
     fig = px.parallel_coordinates(df, **params)
@@ -472,7 +476,7 @@ def timeline(df: pd.DataFrame, spec: specs.Timeline) -> go.Figure:
         x_start=spec.encoding.start,
         x_end=spec.encoding.end,
         y=spec.encoding.y,
-        **common_params(spec.encoding),
+        **common_params(spec),
     )
     update = {}
     update.update(border_style_update(spec.border))
@@ -484,59 +488,60 @@ def timeline(df: pd.DataFrame, spec: specs.Timeline) -> go.Figure:
 
 
 def line_polar(df: pd.DataFrame, spec: specs.LinePolar) -> go.Figure:
-    params = {}
-    if spec.encoding.color:
-        params["color"] = spec.encoding.color
-    return px.line_polar(df, r=spec.encoding.y, theta=spec.encoding.x, **params)
+    return px.line_polar(
+        df, r=spec.encoding.y, theta=spec.encoding.x, **common_params(spec)
+    )
 
 
 def scatter_polar(df: pd.DataFrame, spec: specs.ScatterPolar) -> go.Figure:
-    params = {}
-    if spec.encoding.color:
-        params["color"] = spec.encoding.color
-    return px.scatter_polar(df, r=spec.encoding.y, theta=spec.encoding.x, **params)
+    return px.scatter_polar(
+        df, r=spec.encoding.y, theta=spec.encoding.x, **common_params(spec)
+    )
 
 
 def bar_polar(df: pd.DataFrame, spec: specs.BarPolar) -> go.Figure:
-    params = {}
-    if spec.encoding.color:
-        params["color"] = spec.encoding.color
-    fig = px.bar_polar(df, r=spec.encoding.y, theta=spec.encoding.x, **params)
+    fig = px.bar_polar(
+        df, r=spec.encoding.y, theta=spec.encoding.x, **common_params(spec)
+    )
     apply_opacity(fig, spec.opacity)
     return fig
 
 
 def line_3d(df: pd.DataFrame, spec: specs.Line3D) -> go.Figure:
-    params = {}
-    if spec.encoding.color:
-        params["color"] = spec.encoding.color
     return px.line_3d(
-        df, x=spec.encoding.x, y=spec.encoding.y, z=spec.encoding.z, **params
+        df,
+        x=spec.encoding.x,
+        y=spec.encoding.y,
+        z=spec.encoding.z,
+        **common_params(spec),
     )
 
 
 def scatter_3d(df: pd.DataFrame, spec: specs.Scatter3D) -> go.Figure:
-    params = {}
-    if spec.encoding.color:
-        params["color"] = spec.encoding.color
     return px.scatter_3d(
-        df, x=spec.encoding.x, y=spec.encoding.y, z=spec.encoding.z, **params
+        df,
+        x=spec.encoding.x,
+        y=spec.encoding.y,
+        z=spec.encoding.z,
+        **common_params(spec),
     )
 
 
 def line_ternary(df: pd.DataFrame, spec: specs.LineTernary) -> go.Figure:
-    params = {}
-    if spec.encoding.color:
-        params["color"] = spec.encoding.color
     return px.line_ternary(
-        df, a=spec.encoding.a, b=spec.encoding.x, c=spec.encoding.y, **params
+        df,
+        a=spec.encoding.a,
+        b=spec.encoding.x,
+        c=spec.encoding.y,
+        **common_params(spec),
     )
 
 
 def scatter_ternary(df: pd.DataFrame, spec: specs.ScatterTernary) -> go.Figure:
-    params = {}
-    if spec.encoding.color:
-        params["color"] = spec.encoding.color
     return px.scatter_ternary(
-        df, a=spec.encoding.a, b=spec.encoding.x, c=spec.encoding.y, **params
+        df,
+        a=spec.encoding.a,
+        b=spec.encoding.x,
+        c=spec.encoding.y,
+        **common_params(spec),
     )
