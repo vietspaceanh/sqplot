@@ -339,10 +339,9 @@ def density(df: pd.DataFrame, spec: specs.Density) -> go.Figure:
 
 def heatmap(df: pd.DataFrame, spec: specs.Heatmap) -> go.Figure:
     params = common_params(spec)
-    if spec.nbinsx is not None:
-        params["nbinsx"] = spec.nbinsx
-    if spec.nbinsy is not None:
-        params["nbinsy"] = spec.nbinsy
+    params["nbinsx"] = spec.nbinsx
+    params["nbinsy"] = spec.nbinsy
+    params["text_auto"] = spec.numbered
     return px.density_heatmap(df, x=spec.encoding.x, y=spec.encoding.y, **params)
 
 
