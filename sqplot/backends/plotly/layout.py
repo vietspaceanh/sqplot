@@ -60,10 +60,15 @@ def _apply_axes(
         fig.update_xaxes(showgrid=layout.xgrid)
     if layout.ygrid is not None:
         fig.update_yaxes(showgrid=layout.ygrid)
+
     if layout.x_range is not None:
         fig.update_xaxes(range=layout.x_range)
+    else:
+        fig.update_xaxes(autorange=True)
     if layout.y_range is not None:
         fig.update_yaxes(range=layout.y_range)
+    else:
+        fig.update_yaxes(autorange=True)
 
 
 def _apply_auto_titles(
