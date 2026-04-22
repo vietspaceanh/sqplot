@@ -13,14 +13,12 @@ def get_col_roles(sql_script):
 
     column_roles = {}
     for exp in tree.find(sqlglot.exp.Select).expressions:
-        if exp.expression:
-            col_name = exp.alias or str(exp)
-        else:
-            col_name = exp.alias_or_name
+        comments = exp.pop_comments()
+        col_name = exp.alias_or_name or str(exp).lower()
 
-        if col_name and exp.comments:
+        if col_name and comments:
             column_roles[col_name] = split_preserving_groups(" ".join(
-                [comment for comment in exp.comments if '--' not in comment]
+                [comment for comment in comments if '--' not in comment]
             ))
 
     # Global roles are specified in the top of the query, and are assignments only.
