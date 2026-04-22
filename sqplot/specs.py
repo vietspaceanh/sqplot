@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field, replace
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from .roles import get_tag_value, parse_tag
 
@@ -121,8 +121,11 @@ def _parse_line_style(tags: list[str], prefix: str) -> LineStyle | None:
     return None
 
 
-def _parse_markers(tags: list[str], prefix: str) -> MarkerStyle | None:
-    if not get_tag_value(f"{prefix} markers", tags, bool_tags=BOOL_TAGS):
+def _parse_markers(tags: list[str], prefix: str) -> MarkerStyle | Literal[False] | None:
+    val = get_tag_value(f"{prefix} markers", tags, bool_tags=BOOL_TAGS)
+    if val is False:
+        return False
+    if not val:
         return None
     mc = get_tag_value(f"{prefix} markers color", tags, bool_tags=BOOL_TAGS)
     ms = get_tag_value(f"{prefix} markers size", tags, bool_tags=BOOL_TAGS)
@@ -178,7 +181,7 @@ class Chart:
 class Line(Chart):
     id: ClassVar[str] = "line"
     line_style: LineStyle | None = None
-    markers: MarkerStyle | None = None
+    markers: MarkerStyle | Literal[False] | None = None
     error_band: ErrorBand | None = None
     error_bar: ErrorBar | None = None
     opacity: float | None = None

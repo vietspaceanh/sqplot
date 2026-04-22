@@ -74,7 +74,10 @@ def line(df: pd.DataFrame, spec: specs.Line) -> go.Figure:
                 )
             )
 
-    fig.update_traces(mode="lines+markers")
+    if spec.markers is False:
+        fig.update_traces(mode="lines")
+    else:
+        fig.update_traces(mode="lines+markers")
     update = {}
     update.update(**line_style_update(spec.line_style))
     update.update(**marker_style_update(spec.markers))
