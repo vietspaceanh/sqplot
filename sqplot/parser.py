@@ -21,6 +21,7 @@ _layout_tags = set(specs.Layout.__dataclass_fields__) - {
 
 # ──────────────────────── Intermediate representation ─────────────────────── #
 
+
 @dataclass
 class RawTrace:
     chart_id: str
@@ -37,6 +38,7 @@ class RawSpec:
 
 
 # ─────────────────────────────── SQL → RawSpec ────────────────────────────── #
+
 
 def _resolve_chart_type(tags: list[str], trace_tags: list[str]) -> str:
     base_tag = trace_tags[0]
@@ -85,12 +87,12 @@ def parse_sql(sql: str) -> RawSpec:
             elif key in _layout_tags and not trace_tags:
                 raw.layout_tags[key] = value if value is not None else True
 
-        if "x" in [parse_tag(t)[0] for t in tags]:
+        has_x = "x" in [parse_tag(t)[0] for t in tags]
+        if has_x:
             val = get_tag_value("x range", tags, bool_tags=specs.BOOL_TAGS)
             if val is not None:
                 raw.layout_tags["x_range"] = val
-
-        if not trace_tags:
+        else:
             val = get_tag_value("* range", tags, bool_tags=specs.BOOL_TAGS)
             if val is not None:
                 raw.layout_tags["y_range"] = val
@@ -106,6 +108,7 @@ def parse_sql(sql: str) -> RawSpec:
 
 
 # ──────────────────────────── RawSpec → ChartSpec ─────────────────────────── #
+
 
 def _build_encoding(raw_enc: dict[str, str | list[str]]) -> specs.Encoding:
     return specs.Encoding(
@@ -139,6 +142,7 @@ def build_spec(raw: RawSpec) -> specs.ChartSpec:
 
 
 # ──────────────────────────────── Convenience ─────────────────────────────── #
+
 
 def get_chart_spec(sql: str) -> specs.ChartSpec:
     return build_spec(parse_sql(sql))
