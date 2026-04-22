@@ -200,6 +200,7 @@ class Line(Chart):
 class Scatter(Chart):
     id: ClassVar[str] = "scatter"
     markers: MarkerStyle | None = None
+    opacity: float | None = None
 
     @classmethod
     def parse(
@@ -209,6 +210,7 @@ class Scatter(Chart):
             encoding=replace(encoding, y=column),
             name=_get_name(tags, chart_id),
             markers=_parse_scatter_markers(tags, chart_id),
+            opacity=_get_opacity(tags, chart_id),
         )
 
 

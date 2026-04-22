@@ -138,13 +138,15 @@ def _apply_line_spec(trace: go.Scatter, spec: specs.Line, gdf: pd.DataFrame) -> 
 
 
 def scatter(df: pd.DataFrame, spec: specs.Scatter) -> go.Figure:
-    fig = px.scatter(
-        df, x=spec.encoding.x, y=spec.encoding.y, **common_params(spec.encoding)
-    )
+    params = common_params(spec.encoding)
+    if spec.encoding.style:
+        params["symbol"] = spec.encoding.style
+    fig = px.scatter(df, x=spec.encoding.x, y=spec.encoding.y, **params)
     update = marker_style_update(spec.markers)
     if spec.name:
         update.update(name=spec.name, showlegend=True)
     fig.update_traces(**update)
+    apply_opacity(fig, spec.opacity)
     return fig
 
 
