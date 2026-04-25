@@ -12,8 +12,8 @@ from sqplot.specs import (
 )
 
 STANDARD_XY = {"line", "scatter", "area", "box", "violin", "strip"}
-_DEFAULT_RECT_FILL = "rgba(128,128,128,1)"
-_DEFAULT_RECT_ALPHA = 0.2
+_DEFAULT_RECT_FILL = "yellow"
+_DEFAULT_RECT_ALPHA = 0.4
 
 
 def apply_layout(
@@ -88,7 +88,11 @@ def _apply_auto_titles(
             if type(t).__name__.lower().replace("_", " ") in STANDARD_XY or (
                 isinstance(t, Density) and x_col
             ):
-                fig.update_yaxes(title=t.encoding.y)
+                if getattr(t, "orientation", None) == "h":
+                    if t.encoding.x:
+                        fig.update_yaxes(title=t.encoding.x)
+                else:
+                    fig.update_yaxes(title=t.encoding.y)
         elif len(traces) > 1:
             y_cols = {
                 t.encoding.y for t in traces if hasattr(t, "encoding") and t.encoding.y
