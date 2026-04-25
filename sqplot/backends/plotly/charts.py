@@ -13,6 +13,7 @@ from .utils import (
     get_colorway,
     group_mask,
     has_duplicates,
+    label_template,
     line_style_update,
     marker_style_update,
     orient_xy,
@@ -75,14 +76,20 @@ def line(df: pd.DataFrame, spec: specs.Line) -> go.Figure:
             )
 
     if spec.markers is False:
-        fig.update_traces(mode="lines")
+        base_mode = "lines"
     else:
-        fig.update_traces(mode="lines+markers")
+        base_mode = "lines+markers"
+    label_upd = label_template(spec, dupes=dupes)
+    if label_upd:
+        base_mode += "+text"
+    fig.update_traces(mode=base_mode)
     update = {}
     update.update(**line_style_update(spec.line_style))
     update.update(**marker_style_update(spec.markers))
     if spec.opacity is not None:
         update["opacity"] = spec.opacity
+    if label_upd:
+        update.update(label_upd)
     fig.update_traces(**update)
 
     if spec.error_bar:
@@ -136,6 +143,10 @@ def scatter(df: pd.DataFrame, spec: specs.Scatter) -> go.Figure:
     update = marker_style_update(spec.markers)
     if spec.name:
         update.update(name=spec.name, showlegend=True)
+    label_upd = label_template(spec)
+    if label_upd:
+        update["mode"] = "markers+text"
+        update.update(label_upd)
     fig.update_traces(**update)
     apply_opacity(fig, spec.opacity)
     return fig
@@ -172,8 +183,9 @@ def bar(df: pd.DataFrame, spec: specs.Bar) -> go.Figure:
         update["width"] = spec.bar_width
     if spec.name:
         update.update(name=spec.name, showlegend=True)
-    if spec.annotation_position:
-        update["textposition"] = spec.annotation_position
+    label_upd = label_template(spec, dupes=dupes)
+    if label_upd:
+        update.update(label_upd)
     fig.update_traces(**update)
     apply_opacity(fig, spec.opacity)
     return fig
@@ -196,6 +208,10 @@ def area(df: pd.DataFrame, spec: specs.Area) -> go.Figure:
         update.update(mu)
     if spec.name:
         update.update(name=spec.name, showlegend=True)
+    label_upd = label_template(spec)
+    if label_upd:
+        update["mode"] = "lines+markers+text" if spec.markers else "lines+text"
+        update.update(label_upd)
     fig.update_traces(**update)
     apply_opacity(fig, spec.opacity)
     return fig
@@ -305,25 +321,30 @@ def density(df: pd.DataFrame, spec: specs.Density) -> go.Figure:
         return px.density_contour(df, x=x_col, y=spec.encoding.y, **common_params(spec))
 
     color_col = spec.encoding.color
+    facet_row_col = spec.encoding.facet_row
+    facet_col_col = spec.encoding.facet_col
+    group_cols = [c for c in [color_col, facet_row_col, facet_col_col] if c]
+
     rows = []
     y_col = spec.encoding.y
-    if color_col:
-        for group_val, group_df in df.groupby(color_col):
+    if group_cols:
+        for vals, group_df in df.groupby(group_cols):
             x_grid, y_kde = compute_kde_1d(group_df[y_col])
             if len(x_grid) == 0:
                 continue
+            if not isinstance(vals, tuple):
+                vals = (vals,)
             for x, y in zip(x_grid, y_kde):
-                rows.append({y_col: x, "density": y, color_col: group_val})
+                row = {y_col: x, "density": y}
+                row.update(zip(group_cols, vals))
+                rows.append(row)
     else:
         x_grid, y_kde = compute_kde_1d(df[y_col])
         for x, y in zip(x_grid, y_kde):
             rows.append({y_col: x, "density": y})
     kde_df = pd.DataFrame(rows)
 
-    kde_params = {}
-    if color_col:
-        kde_params["color"] = color_col
-    fig = px.area(kde_df, x=y_col, y="density", **kde_params)
+    fig = px.area(kde_df, x=y_col, y="density", **common_params(spec))
     for t in fig.data:
         t.stackgroup = None
         t.fill = "tozeroy"
@@ -358,8 +379,9 @@ def funnel(df: pd.DataFrame, spec: specs.Funnel) -> go.Figure:
     update.update(border_style_update(spec.border))
     if spec.name:
         update.update(name=spec.name, showlegend=True)
-    if spec.annotation_position:
-        update["textposition"] = spec.annotation_position
+    label_upd = label_template(spec)
+    if label_upd:
+        update.update(label_upd)
     fig.update_traces(**update)
     apply_opacity(fig, spec.opacity)
     return fig

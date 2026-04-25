@@ -1,3 +1,5 @@
+import warnings
+
 import plotly.graph_objects as go
 import pandas as pd
 import plotly.express as px
@@ -73,23 +75,6 @@ def common_params(spec) -> dict:
     params = {}
     if enc.color:
         params["color"] = enc.color
-    if enc.text and isinstance(
-        spec,
-        (
-            specs.Scatter,
-            specs.ScatterPolar,
-            specs.Scatter3D,
-            specs.ScatterTernary,
-            specs.LinePolar,
-            specs.Line3D,
-            specs.LineTernary,
-            specs.Area,
-            specs.Bar,
-            specs.BarPolar,
-            specs.ECDF,
-        ),
-    ):
-        params["text"] = enc.text
     if enc.style:
         if isinstance(
             spec,
@@ -131,6 +116,29 @@ def common_params(spec) -> dict:
         params["facet_col"] = enc.facet_col
         params["facet_col_spacing"] = 0.12
     return params
+
+
+def label_template(spec, dupes: bool = False) -> dict | None:
+    if not spec.label:
+        return None
+    label = spec.label
+    if label.col and dupes:
+        warnings.warn(
+            f"Label column '{label.col}' was skipped because data contains "
+            f"duplicates. Aggregate data first to enable labeling.",
+            stacklevel=3,
+        )
+        return None
+    if label.col:
+        field = "text"
+    else:
+        orientation = getattr(spec, "orientation", None)
+        field = "x" if orientation == "h" else "y"
+    tpl = f"%{{{field}:{label.format}}}" if label.format else f"%{{{field}}}"
+    result = {"texttemplate": tpl, "textposition": label.position}
+    if label.col:
+        result["text"] = label.col
+    return result
 
 
 def dim_cols(spec) -> list[str]:

@@ -19,7 +19,6 @@ class Encoding:
     color: str | None = None
     size: str | None = None
     style: str | None = None
-    text: str | None = None
 
     facet_row: str | None = None
     facet_col: str | None = None
@@ -81,6 +80,13 @@ class ErrorBand:
 class ErrorBar:
     y: str | float | list | None = None
     y_minus: str | float | list | None = None
+
+
+@dataclass
+class Label:
+    position: str = "auto"
+    format: str | None = None
+    col: str | None = None
 
 
 # ── Parse helpers ─────────────────────────────────────────────────────────────
@@ -156,6 +162,18 @@ def _parse_error_bar(tags: list[str], prefix: str) -> ErrorBar | None:
     return ErrorBar(y=val)
 
 
+def _parse_label(tags: list[str], prefix: str) -> Label | None:
+    val = get_tag_value(f"{prefix} label", tags, bool_tags=BOOL_TAGS)
+    if not val:
+        return None
+    position = (
+        get_tag_value(f"{prefix} label position", tags, bool_tags=BOOL_TAGS) or "auto"
+    )
+    fmt = get_tag_value(f"{prefix} label format", tags, bool_tags=BOOL_TAGS)
+    col = get_tag_value(f"{prefix} label col", tags, bool_tags=BOOL_TAGS)
+    return Label(position=position, format=fmt, col=col)
+
+
 def _parse_scatter_markers(tags: list[str], prefix: str) -> MarkerStyle | None:
     mc = get_tag_value(f"{prefix} color", tags, bool_tags=BOOL_TAGS)
     ms = get_tag_value(f"{prefix} size", tags, bool_tags=BOOL_TAGS)
@@ -191,6 +209,7 @@ class Line(Chart):
     error_band: ErrorBand | None = None
     error_bar: ErrorBar | None = None
     opacity: float | None = None
+    label: Label | None = None
 
     @classmethod
     def parse(
@@ -203,6 +222,7 @@ class Line(Chart):
             markers=_parse_markers(tags, chart_id),
             error_bar=_parse_error_bar(tags, chart_id),
             opacity=_get_opacity(tags, chart_id),
+            label=_parse_label(tags, chart_id),
         )
 
 
@@ -211,6 +231,7 @@ class Scatter(Chart):
     id: ClassVar[str] = "scatter"
     markers: MarkerStyle | None = None
     opacity: float | None = None
+    label: Label | None = None
 
     @classmethod
     def parse(
@@ -221,6 +242,7 @@ class Scatter(Chart):
             name=_get_name(tags, chart_id),
             markers=_parse_scatter_markers(tags, chart_id),
             opacity=_get_opacity(tags, chart_id),
+            label=_parse_label(tags, chart_id),
         )
 
 
@@ -232,7 +254,7 @@ class Bar(Chart):
     orientation: str | None = None
     bar_width: float | None = None
     opacity: float | None = None
-    annotation_position: str | None = None
+    label: Label | None = None
 
     @classmethod
     def parse(
@@ -246,9 +268,7 @@ class Bar(Chart):
             orientation=_get_orientation(tags, chart_id),
             bar_width=get_tag_value(f"{chart_id} size", tags, bool_tags=BOOL_TAGS),
             opacity=_get_opacity(tags, chart_id),
-            annotation_position=get_tag_value(
-                f"{chart_id} annotation position", tags, bool_tags=BOOL_TAGS
-            ),
+            label=_parse_label(tags, chart_id),
         )
 
 
@@ -259,6 +279,7 @@ class Area(Chart):
     line_style: LineStyle | None = None
     markers: MarkerStyle | None = None
     opacity: float | None = None
+    label: Label | None = None
 
     @classmethod
     def parse(
@@ -271,6 +292,7 @@ class Area(Chart):
             line_style=_parse_line_style(tags, f"{chart_id} line"),
             markers=_parse_markers(tags, chart_id),
             opacity=_get_opacity(tags, chart_id),
+            label=_parse_label(tags, chart_id),
         )
 
 
@@ -408,7 +430,6 @@ class Hist(Chart):
     nbins: int | None = None
     border: BorderStyle | None = None
     opacity: float | None = None
-    annotation_position: str | None = None
     orientation: str | None = None
 
     @classmethod
@@ -662,7 +683,7 @@ class Funnel(Chart):
     id: ClassVar[str] = "funnel"
     border: BorderStyle | None = None
     opacity: float | None = None
-    annotation_position: str | None = None
+    label: Label | None = None
 
     @classmethod
     def parse(
@@ -673,9 +694,7 @@ class Funnel(Chart):
             name=_get_name(tags, chart_id),
             border=_parse_border(tags, chart_id),
             opacity=_get_opacity(tags, chart_id),
-            annotation_position=get_tag_value(
-                f"{chart_id} annotation position", tags, bool_tags=BOOL_TAGS
-            ),
+            label=_parse_label(tags, chart_id),
         )
 
 
