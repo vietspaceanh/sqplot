@@ -1,6 +1,6 @@
 import plotly.graph_objects as go
 
-from sqplot.specs import (
+from ttplot.specs import (
     Layout,
     Density,
     Text,

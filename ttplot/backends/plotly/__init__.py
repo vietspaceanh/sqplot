@@ -1,12 +1,12 @@
 from duckdb import sql
 from plotly.graph_objects import Figure
 
-from sqplot import specs
-from sqplot.backends.plotly import charts
-from sqplot.backends.plotly.utils import get_colorway
-from sqplot.parser import get_chart_spec
-from sqplot.backends.plotly.config import apply_theme
-from sqplot.backends.plotly.layout import apply_layout
+from ttplot import specs
+from ttplot.backends.plotly import charts
+from ttplot.backends.plotly.utils import get_colorway
+from ttplot.parser import get_chart_spec
+from ttplot.backends.plotly.config import apply_theme
+from ttplot.backends.plotly.layout import apply_layout
 
 NO_FILLCOLOR = frozenset({"histogram", "histogram2d", "histogram2dcontour"})
 

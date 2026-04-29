@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from sqplot import specs
+from ttplot import specs
 from .utils import (
     apply_opacity,
     border_style_update,

@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.io as pio
 
-from sqplot import specs
+from ttplot import specs
 
 DASH_PATTERNS = ["solid", "dash", "dot", "dashdot", "longdash", "longdashdot"]
 MARKER_SYMBOLS = [
