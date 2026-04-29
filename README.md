@@ -25,7 +25,7 @@ plot("""
 """)
 ```
 
-<p align="center"><img src="assets/images/fmri-line-chart.png" width="75%"></p>
+<p align="center"><img src="assets/images/fmri-line-chart.png"></p>
 
 That's it. `timepoint` becomes the x-axis, `signal` is drawn as a line, split by `region` as color and `event` as line style. No API to memorize, just tag your columns.
 
@@ -50,7 +50,7 @@ plot("""
         hi: y + 20
 """)
 ```
-<p align="center"><img src="assets/images/simple-error-band.png" width="75%"></p>
+<p align="center"><img src="assets/images/simple-error-band.png"></p>
 
 **Layering multiple chart types:**
 
@@ -70,7 +70,7 @@ plot("""
         box: value,   --box horizontal alpha=0.3
 """)
 ```
-<p align="center"><img src="assets/images/iris.png" width="75%"></p>
+<p align="center"><img src="assets/images/iris.png"></p>
 
 **Grouped bars with labels:**
 
@@ -85,7 +85,7 @@ plot("""
     GROUP BY ALL
 """)
 ```
-<p align="center"><img src="assets/images/penguins-bar-plot.png" width="75%"></p>
+<p align="center"><img src="assets/images/penguins-bar-plot.png"></p>
 
 
 ## Supported Chart Types
