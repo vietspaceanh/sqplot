@@ -44,7 +44,9 @@ def line(df: pd.DataFrame, spec: specs.Line) -> go.Figure:
     params = common_params(spec)
     fig = px.line(agg_df if dupes else df, x=x_col, y=y_col, **params)
 
-    if dupes:
+    has_user_band = spec.error_band and spec.error_band.lower is not None
+
+    if dupes and not has_user_band:
         band_opacity = spec.error_band.opacity if spec.error_band else 0.2
 
         for trace in list(fig.data):
@@ -75,6 +77,9 @@ def line(df: pd.DataFrame, spec: specs.Line) -> go.Figure:
                 )
             )
 
+    if has_user_band:
+        _apply_error_band(fig, spec, df, x_col, y_col, agg_df if dupes else None)
+
     if spec.markers is False:
         base_mode = "lines"
     else:
@@ -92,49 +97,82 @@ def line(df: pd.DataFrame, spec: specs.Line) -> go.Figure:
         update.update(label_upd)
     fig.update_traces(**update)
 
-    if spec.error_bar:
-        _apply_error_bars(fig, spec, agg_df if dupes else df)
-
     if spec.name:
         fig.update_traces(name=spec.name, showlegend=True)
 
     return fig
 
 
-def _apply_error_bars(fig: go.Figure, spec: specs.Line, data: pd.DataFrame) -> None:
-    eb_y = spec.error_bar.y
-    eb_y_minus = spec.error_bar.y_minus
-    for trace in fig.data:
-        if hasattr(trace, "error_y") and trace.error_y is not None:
-            continue
-        n = len(trace.y) if hasattr(trace, "y") and trace.y is not None else 0
+def _compute_band_bounds(
+    data: pd.DataFrame, y_col: str, lower: str | float, upper: str | float
+) -> tuple[pd.Series, pd.Series]:
+    lo = data[lower] if isinstance(lower, str) else data[y_col] - lower
+    hi = data[upper] if isinstance(upper, str) else data[y_col] + upper
+    if isinstance(lower, str) and isinstance(upper, str) and lower == upper:
+        lo = data[y_col] - data[lower]
+        hi = data[y_col] + data[upper]
+    return lo, hi
+
+
+def _apply_error_band(
+    fig: go.Figure,
+    spec: specs.Line,
+    df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    agg_df: pd.DataFrame | None,
+) -> None:
+    eb = spec.error_band
+    band_opacity = eb.opacity
+    data = agg_df if agg_df is not None else df
+
+    for trace in list(fig.data):
+        n = len(trace.x) if hasattr(trace, "x") and trace.x is not None else 0
         if n == 0:
             continue
-        if isinstance(eb_y, str):
-            trace.error_y = dict(
-                type="data", array=data[eb_y].tolist()[:n], visible=True
+
+        lo_vals, hi_vals = _compute_band_bounds(data, y_col, eb.lower, eb.upper)
+
+        trace_df = pd.DataFrame({x_col: trace.x, y_col: trace.y})
+        if agg_df is not None:
+            std_col = "__line_std__"
+            merge_cols = [c for c in [x_col, y_col, std_col] if c in agg_df.columns]
+            matched = trace_df.merge(agg_df[merge_cols], on=[x_col, y_col]).sort_values(
+                x_col
             )
-        elif isinstance(eb_y, (int, float)):
-            if eb_y_minus is not None:
-                trace.error_y = dict(
-                    type="data",
-                    symmetric=False,
-                    arrayminus=(
-                        data[eb_y_minus].tolist()[:n]
-                        if isinstance(eb_y_minus, str)
-                        else [eb_y_minus] * n
-                    ),
-                    array=[eb_y] * n,
-                    visible=True,
-                )
-            else:
-                trace.error_y = dict(
-                    type="data", symmetric=True, array=[eb_y] * n, visible=True
-                )
-        elif isinstance(eb_y, list):
-            trace.error_y = dict(
-                type="data", symmetric=True, array=eb_y[:n], visible=True
+        else:
+            matched = trace_df.merge(
+                data[[x_col, y_col]], on=[x_col, y_col]
+            ).sort_values(x_col)
+
+        if matched.empty:
+            continue
+
+        idx = matched.index[:n]
+        lower = lo_vals.loc[idx].reset_index(drop=True)
+        upper = hi_vals.loc[idx].reset_index(drop=True)
+
+        line_color = getattr(trace.line, "color", None) or get_colorway()[0]
+
+        fig.add_trace(
+            go.Scatter(
+                x=pd.concat(
+                    [
+                        matched[x_col].reset_index(drop=True),
+                        matched[x_col].reset_index(drop=True).iloc[::-1],
+                    ]
+                ),
+                y=pd.concat([upper, lower.iloc[::-1]]),
+                fill="toself",
+                fillcolor=color_with_alpha(line_color, band_opacity),
+                line=dict(color="rgba(0,0,0,0)"),
+                hoverinfo="skip",
+                showlegend=False,
+                legendgroup=trace.legendgroup,
+                xaxis=trace.xaxis,
+                yaxis=trace.yaxis,
             )
+        )
 
 
 def scatter(df: pd.DataFrame, spec: specs.Scatter) -> go.Figure:
@@ -168,10 +206,7 @@ def bar(df: pd.DataFrame, spec: specs.Bar) -> go.Figure:
         err_key = "error_x" if spec.orientation == "h" else "error_y"
         params[err_key] = std_col
         fig = px.bar(agg_df, **params)
-        if spec.orientation == "h":
-            fig.update_xaxes(title_text=f"avg of {y_col}")
-        else:
-            fig.update_yaxes(title_text=f"avg of {y_col}")
+        fig._ttplot_agg = True
     else:
         fig = px.bar(df, **params)
 

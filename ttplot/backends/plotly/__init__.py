@@ -16,8 +16,6 @@ def plot(sql_script: str) -> Figure:
     df = sql(sql_script).df()
     spec = get_chart_spec(sql_script)
 
-    x_col = spec.traces[0].encoding.x if spec.traces else None
-
     figs, active_traces = [], []
     for trace in spec.traces:
         func = getattr(charts, trace.id, None)
@@ -26,7 +24,7 @@ def plot(sql_script: str) -> Figure:
             active_traces.append(trace)
 
     fig = _combine_figures(figs, active_traces)
-    fig = apply_layout(fig, spec.layout, x_col, spec.traces)
+    fig = apply_layout(fig, spec.layout, spec.traces)
 
     return fig
 

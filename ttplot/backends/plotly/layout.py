@@ -16,12 +16,11 @@ _DEFAULT_RECT_FILL = "yellow"
 _DEFAULT_RECT_ALPHA = 0.4
 
 
-def apply_layout(
-    fig: go.Figure, layout: Layout, x_col: str | None, traces: list
-) -> go.Figure:
+def apply_layout(fig: go.Figure, layout: Layout, traces: list) -> go.Figure:
     _apply_base_layout(fig, layout)
-    _apply_axes(fig, layout, x_col, traces)
-    _apply_auto_titles(fig, layout, x_col, traces)
+    _apply_axes(fig, layout, traces)
+    _apply_axis_labels(fig, layout, traces)
+    _apply_noerror(fig, layout)
     _apply_shapes(fig, layout)
     return fig
 
@@ -50,9 +49,7 @@ def _apply_base_layout(fig: go.Figure, layout: Layout) -> None:
         fig.update_layout(**layout_update)
 
 
-def _apply_axes(
-    fig: go.Figure, layout: Layout, x_col: str | None, traces: list
-) -> None:
+def _apply_axes(fig: go.Figure, layout: Layout, traces: list) -> None:
     if layout.grid is not None:
         fig.update_xaxes(showgrid=layout.grid)
         fig.update_yaxes(showgrid=layout.grid)
@@ -71,12 +68,25 @@ def _apply_axes(
         fig.update_yaxes(autorange=True)
 
 
-def _apply_auto_titles(
-    fig: go.Figure, layout: Layout, x_col: str | None, traces: list
-) -> None:
+def _visual_axes(traces: list) -> tuple[str | None, str | None]:
+    if not traces:
+        return None, None
+    t = traces[0]
+    orient = getattr(t, "orientation", None)
+    if orient == "h":
+        return t.encoding.y, t.encoding.x
+    return t.encoding.x, t.encoding.y
+
+
+def _apply_axis_labels(fig: go.Figure, layout: Layout, traces: list) -> None:
+    vx, vy = _visual_axes(traces)
+    agg = getattr(fig, "_ttplot_agg", False)
+    y_col = traces[0].encoding.y if traces else None
+
     if layout.xlabel is None:
-        if x_col:
-            fig.update_xaxes(title=x_col)
+        if vx:
+            title = f"avg of {vx}" if agg and vx == y_col else vx
+            fig.update_xaxes(title=title)
         elif len(traces) == 1:
             t = traces[0]
             if isinstance(t, Density) and t.encoding.x is None:
@@ -86,19 +96,30 @@ def _apply_auto_titles(
         if len(traces) == 1:
             t = traces[0]
             if type(t).__name__.lower().replace("_", " ") in STANDARD_XY or (
-                isinstance(t, Density) and x_col
+                isinstance(t, Density) and vx
             ):
                 if getattr(t, "orientation", None) == "h":
                     if t.encoding.x:
                         fig.update_yaxes(title=t.encoding.x)
                 else:
-                    fig.update_yaxes(title=t.encoding.y)
+                    if t.encoding.y:
+                        fig.update_yaxes(title=t.encoding.y)
         elif len(traces) > 1:
             y_cols = {
                 t.encoding.y for t in traces if hasattr(t, "encoding") and t.encoding.y
             }
             if len(y_cols) > 1:
                 fig.update_yaxes(title="")
+
+
+def _apply_noerror(fig: go.Figure, layout: Layout) -> None:
+    if not layout.noerror:
+        return
+    for trace in fig.data:
+        if hasattr(trace, "error_x") and trace.error_x is not None:
+            trace.error_x = None
+        if hasattr(trace, "error_y") and trace.error_y is not None:
+            trace.error_y = None
 
 
 def _apply_shapes(fig: go.Figure, layout: Layout) -> None:

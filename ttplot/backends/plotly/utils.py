@@ -135,7 +135,13 @@ def label_template(spec, dupes: bool = False) -> dict | None:
         orientation = getattr(spec, "orientation", None)
         field = "x" if orientation == "h" else "y"
     tpl = f"%{{{field}:{label.format}}}" if label.format else f"%{{{field}}}"
-    result = {"texttemplate": tpl, "textposition": label.position}
+    position = label.position
+    if dupes and position == "auto":
+        position = "inside"
+    result = {"texttemplate": tpl, "textposition": position}
+    if position == "inside":
+        orientation = getattr(spec, "orientation", None)
+        result["insidetextanchor"] = label.align or "middle"
     if label.col:
         result["text"] = label.col
     return result

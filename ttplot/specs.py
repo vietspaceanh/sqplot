@@ -73,13 +73,9 @@ class BorderStyle:
 
 @dataclass
 class ErrorBand:
+    lower: str | float | None = None
+    upper: str | float | None = None
     opacity: float = 0.2
-
-
-@dataclass
-class ErrorBar:
-    y: str | float | list | None = None
-    y_minus: str | float | list | None = None
 
 
 @dataclass
@@ -87,12 +83,13 @@ class Label:
     position: str = "auto"
     format: str | None = None
     col: str | None = None
+    align: str | None = None
 
 
 # ── Parse helpers ─────────────────────────────────────────────────────────────
 
 BOOL_TAGS = frozenset(
-    {"stacked", "grouped", "horizontal", "dashed", "dotted", "numbered"}
+    {"stacked", "grouped", "horizontal", "dashed", "dotted", "numbered", "noerror"}
 )
 
 
@@ -153,25 +150,26 @@ def _parse_border(tags: list[str], prefix: str) -> BorderStyle | None:
     return None
 
 
-def _parse_error_bar(tags: list[str], prefix: str) -> ErrorBar | None:
+def _parse_error_band(tags: list[str], prefix: str) -> ErrorBand | None:
     val = get_tag_value(f"{prefix} error", tags, bool_tags=BOOL_TAGS)
     if val is None:
         return None
     if isinstance(val, list):
-        return ErrorBar(y_minus=val[0], y=val[1] if len(val) > 1 else val[0])
-    return ErrorBar(y=val)
+        return ErrorBand(lower=val[0], upper=val[1] if len(val) > 1 else val[0])
+    return ErrorBand(lower=val, upper=val)
 
 
 def _parse_label(tags: list[str], prefix: str) -> Label | None:
     val = get_tag_value(f"{prefix} label", tags, bool_tags=BOOL_TAGS)
     if not val:
         return None
+    col = val if isinstance(val, str) else None
     position = (
         get_tag_value(f"{prefix} label position", tags, bool_tags=BOOL_TAGS) or "auto"
     )
     fmt = get_tag_value(f"{prefix} label format", tags, bool_tags=BOOL_TAGS)
-    col = get_tag_value(f"{prefix} label col", tags, bool_tags=BOOL_TAGS)
-    return Label(position=position, format=fmt, col=col)
+    align = get_tag_value(f"{prefix} label align", tags, bool_tags=BOOL_TAGS)
+    return Label(position=position, format=fmt, col=col, align=align)
 
 
 def _parse_scatter_markers(tags: list[str], prefix: str) -> MarkerStyle | None:
@@ -207,7 +205,6 @@ class Line(Chart):
     line_style: LineStyle | None = None
     markers: MarkerStyle | Literal[False] | None = None
     error_band: ErrorBand | None = None
-    error_bar: ErrorBar | None = None
     opacity: float | None = None
     label: Label | None = None
 
@@ -220,7 +217,7 @@ class Line(Chart):
             name=_get_name(tags, chart_id),
             line_style=_parse_line_style(tags, chart_id),
             markers=_parse_markers(tags, chart_id),
-            error_bar=_parse_error_bar(tags, chart_id),
+            error_band=_parse_error_band(tags, chart_id),
             opacity=_get_opacity(tags, chart_id),
             label=_parse_label(tags, chart_id),
         )
@@ -1020,6 +1017,7 @@ class Layout:
     x_range: list | None = None
     y_range: list | None = None
     barmode: str | None = None
+    noerror: bool = False
     shapes: list = field(default_factory=list)
 
 

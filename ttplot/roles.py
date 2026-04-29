@@ -17,9 +17,9 @@ def get_col_roles(sql_script):
         col_name = exp.alias_or_name or str(exp).lower()
 
         if col_name and comments:
-            column_roles[col_name] = split_preserving_groups(" ".join(
-                [comment for comment in comments if '--' not in comment]
-            ))
+            column_roles[col_name] = split_preserving_groups(
+                " ".join([comment for comment in comments if "--" not in comment])
+            )
 
     # Global roles are specified in the top of the query, and are assignments only.
     global_roles = [
@@ -44,7 +44,7 @@ def parse_tag(tag: str):
     def tokenize(s):
         tokens, i = [], 0
         while i < len(s):
-            if s[i].isspace():
+            if s[i].isspace() or s[i] == ",":
                 i += 1
             elif s[i] in "\"'":
                 quote = s[i]
@@ -62,7 +62,7 @@ def parse_tag(tag: str):
                 i += 1
             else:
                 start = i
-                while i < len(s) and s[i] not in " \t\n[({])}\"'":
+                while i < len(s) and s[i] not in " \t\n[({])}\"',":
                     i += 1
                 tokens.append(s[start:i])
         return tokens

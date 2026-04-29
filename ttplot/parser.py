@@ -86,6 +86,8 @@ def parse_sql(sql: str) -> RawSpec:
                     raw.encoding[key] = column
             elif key in _layout_tags and not trace_tags:
                 raw.layout_tags[key] = value if value is not None else True
+            elif key == "noerror":
+                raw.layout_tags["noerror"] = True
 
         has_x = "x" in [parse_tag(t)[0] for t in tags]
         if has_x:
