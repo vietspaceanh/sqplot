@@ -89,11 +89,17 @@ def _primary_color(trace) -> str | None:
 
 def _set_color(trace, color: str):
     """Assign color to marker, line, and fill."""
+    if trace.type in ("histogram2d", "histogram2dcontour"):
+        trace.colorscale = [[0, color], [1, color]]
+        trace.contours.coloring = "lines"
+        trace.line.width = 1
+        trace.showscale = False
+        return
+
     trace.marker.color = color
 
     if hasattr(trace, "line"):
         lc = getattr(trace.line, "color", None)
-        # Only consider hex colors, skip RGBA colors (with alpha)
         if lc is None or lc.startswith("#"):
             trace.line.color = color
 

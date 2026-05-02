@@ -79,6 +79,8 @@ def parse_sql(sql: str) -> RawSpec:
 
         for tag in tags:
             key, value = parse_tag(tag)
+            if value is not None:
+                continue
             if key in specs.Encoding.__dataclass_fields__:
                 if key == "dim":
                     raw.encoding.setdefault("dim", []).append(column)

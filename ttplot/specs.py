@@ -76,6 +76,7 @@ class ErrorBand:
     lower: str | float | None = None
     upper: str | float | None = None
     opacity: float = 0.2
+    color: str | None = None
 
 
 @dataclass
@@ -104,11 +105,15 @@ def _get_orientation(tags: list[str], chart_id: str) -> str | None:
 
 
 def _get_opacity(tags: list[str], chart_id: str) -> float | None:
+    last_plain = None
     for tag in tags:
         if "=" not in tag:
+            last_plain = tag
             continue
         key, val = parse_tag(tag)
         if key in ("alpha", "opacity") and val is not None:
+            if last_plain is not None and last_plain != chart_id:
+                continue
             return float(val)
     return None
 
@@ -152,11 +157,18 @@ def _parse_border(tags: list[str], prefix: str) -> BorderStyle | None:
 
 def _parse_error_band(tags: list[str], prefix: str) -> ErrorBand | None:
     val = get_tag_value(f"{prefix} error", tags, bool_tags=BOOL_TAGS)
-    if val is None:
+    color = get_tag_value(f"{prefix} * color", tags, bool_tags=BOOL_TAGS)
+    op = get_tag_value(f"{prefix} * opacity", tags, bool_tags=BOOL_TAGS)
+    if op is None:
+        op = get_tag_value(f"{prefix} * alpha", tags, bool_tags=BOOL_TAGS)
+    opacity = op or 0.2
+    if val is None and color is None:
         return None
+    if val is None or val is True:
+        return ErrorBand(color=color, opacity=opacity)
     if isinstance(val, list):
-        return ErrorBand(lower=val[0], upper=val[1] if len(val) > 1 else val[0])
-    return ErrorBand(lower=val, upper=val)
+        return ErrorBand(lower=val[0], upper=val[1] if len(val) > 1 else val[0], color=color, opacity=opacity)
+    return ErrorBand(lower=val, upper=val, color=color, opacity=opacity)
 
 
 def _parse_label(tags: list[str], prefix: str) -> Label | None:
@@ -511,7 +523,7 @@ class Density(Chart):
         cls, tags: list[str], column: str, chart_id: str, encoding: Encoding
     ) -> Density:
         color = get_tag_value(f"{chart_id} color", tags, bool_tags=BOOL_TAGS)
-        width = get_tag_value(f"{chart_id} line size", tags, bool_tags=BOOL_TAGS)
+        width = get_tag_value(f"{chart_id} line size", tags, bool_tags=BOOL_TAGS) or 1
         ls = None
         if color is not None or width is not None:
             ls = LineStyle(color=color, width=width)

@@ -7,7 +7,7 @@ from .utils import (
     apply_opacity,
     border_style_update,
     build_style_maps,
-    color_with_alpha,
+
     common_params,
     dim_cols,
     get_colorway,
@@ -60,14 +60,18 @@ def line(df: pd.DataFrame, spec: specs.Line) -> go.Figure:
 
             upper = matched[y_col] + matched[std_col]
             lower = matched[y_col] - matched[std_col]
-            line_color = getattr(trace.line, "color", None) or get_colorway()[0]
+            if spec.error_band and spec.error_band.color:
+                line_color = spec.error_band.color
+            else:
+                line_color = getattr(trace.line, "color", None) or get_colorway()[0]
 
             fig.add_trace(
                 go.Scatter(
                     x=pd.concat([matched[x_col], matched[x_col].iloc[::-1]]),
                     y=pd.concat([upper, lower.iloc[::-1]]),
                     fill="toself",
-                    fillcolor=color_with_alpha(line_color, band_opacity),
+                    fillcolor=line_color,
+                    opacity=band_opacity,
                     line=dict(color="rgba(0,0,0,0)"),
                     hoverinfo="skip",
                     showlegend=False,
@@ -96,6 +100,19 @@ def line(df: pd.DataFrame, spec: specs.Line) -> go.Figure:
     if label_upd:
         update.update(label_upd)
     fig.update_traces(**update)
+
+    band_opacity = spec.error_band.opacity if spec.error_band else 0.2
+    for trace in fig.data:
+        if trace.hoverinfo == "skip" and trace.fill == "toself":
+            trace.line.color = "rgba(0,0,0,0)"
+            trace.marker = None
+            trace.opacity = band_opacity
+
+    data = list(fig.data)
+    bands = [t for t in data if t.hoverinfo == "skip" and t.fill == "toself"]
+    lines = [t for t in data if not (t.hoverinfo == "skip" and t.fill == "toself")]
+    if bands:
+        fig.data = tuple(bands + lines)
 
     if spec.name:
         fig.update_traces(name=spec.name, showlegend=True)
@@ -152,7 +169,10 @@ def _apply_error_band(
         lower = lo_vals.loc[idx].reset_index(drop=True)
         upper = hi_vals.loc[idx].reset_index(drop=True)
 
-        line_color = getattr(trace.line, "color", None) or get_colorway()[0]
+        if spec.error_band and spec.error_band.color:
+            line_color = spec.error_band.color
+        else:
+            line_color = getattr(trace.line, "color", None) or get_colorway()[0]
 
         fig.add_trace(
             go.Scatter(
@@ -164,7 +184,8 @@ def _apply_error_band(
                 ),
                 y=pd.concat([upper, lower.iloc[::-1]]),
                 fill="toself",
-                fillcolor=color_with_alpha(line_color, band_opacity),
+                fillcolor=line_color,
+                opacity=band_opacity,
                 line=dict(color="rgba(0,0,0,0)"),
                 hoverinfo="skip",
                 showlegend=False,
@@ -353,7 +374,12 @@ def density(df: pd.DataFrame, spec: specs.Density) -> go.Figure:
 
     x_col = spec.encoding.x
     if x_col:
-        return px.density_contour(df, x=x_col, y=spec.encoding.y, **common_params(spec))
+        fig = px.density_contour(df, x=x_col, y=spec.encoding.y, **common_params(spec))
+        update = line_style_update(spec.line_style)
+        if update:
+            fig.update_traces(**update)
+        apply_opacity(fig, spec.opacity)
+        return fig
 
     color_col = spec.encoding.color
     facet_row_col = spec.encoding.facet_row
