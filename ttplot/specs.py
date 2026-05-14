@@ -1029,6 +1029,7 @@ class Layout:
     x_range: list | None = None
     y_range: list | None = None
     barmode: str | None = None
+    axis: str | None = None
     noerror: bool = False
     shapes: list = field(default_factory=list)
 

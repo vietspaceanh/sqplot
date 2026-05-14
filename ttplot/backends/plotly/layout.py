@@ -67,6 +67,9 @@ def _apply_axes(fig: go.Figure, layout: Layout, traces: list) -> None:
     else:
         fig.update_yaxes(autorange=True)
 
+    if layout.axis == "equal":
+        fig.update_yaxes(scaleanchor="x", scaleratio=1)
+
 
 def _visual_axes(traces: list) -> tuple[str | None, str | None]:
     if not traces:
