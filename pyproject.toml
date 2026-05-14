@@ -1,11 +1,11 @@
 [project]
 name = "ttplot"
-version = "0.2.2"
+version = "0.2.3"
 requires-python = ">=3.13"
 dependencies = [
     "plotly>=6.3.1",
-    "duckdb>=1.4.3",
-    "sqlglot>=30.4.3",
+    "duckdb>=1.5.0",
+    "sqlglot>=30.8.0",
 ]
 
 [dependency-groups]
@@ -13,3 +13,6 @@ dev = [
     "ipykernel>=7.2.0",
     "nbformat>=5.10.4",
 ]
+
+[tool.setuptools.packages.find]
+include = ["ttplot*"]
